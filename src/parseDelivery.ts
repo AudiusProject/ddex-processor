@@ -1,6 +1,7 @@
 import { Genre } from '@audius/sdk'
 import * as cheerio from 'cheerio'
 import decompress from 'decompress'
+import type { Element } from 'domhandler'
 import { mkdtemp, readFile, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +9,7 @@ import { releaseRepo, userRepo, xmlRepo } from './db'
 import { sources } from './sources'
 import { omitEmpty } from './util'
 
-type CH = cheerio.Cheerio<cheerio.Element>
+type CH = cheerio.Cheerio<Element>
 
 export type DDEXReleaseIds = {
   party_id?: string

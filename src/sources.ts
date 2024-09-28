@@ -43,7 +43,7 @@ export const sources = {
   findByXmlUrl(xmlUrl: string) {
     const u = new URL(xmlUrl)
     const found = sourceList.find((s) => s.awsBucket == u.host)
-    if (!found) throw new Error(`unable to find source for name: ${name}`)
+    if (!found) throw new Error(`unable to find source for xmlUrl: ${xmlUrl}`)
     return found
   },
 

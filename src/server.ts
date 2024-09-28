@@ -337,12 +337,14 @@ app.get('/releases/:key', (c) => {
           <div style="flex-grow: 1">
             <h3>${parsedRelease.title}</h3>
             <h5>
-              ${parsedRelease.artists.map(
-                (a) =>
-                  html`<em style="margin-right: 5px" data-tooltip="${a.role}"
-                    >${a.name}</em
-                  >`
-              )}
+              ${parsedRelease.artists
+                .slice(0, 1)
+                .map(
+                  (a) =>
+                    html`<em style="margin-right: 5px" data-tooltip="${a.role}"
+                      >${a.name}</em
+                    >`
+                )}
             </h5>
             ${parsedRelease.soundRecordings.map(
               (sr) => html`

@@ -386,7 +386,7 @@ function toStmt(rawSql: string) {
   return stmtCache[rawSql]
 }
 
-export function dbSelect(table: string, data: Record<string, any>) {
+function dbSelect(table: string, data: Record<string, any>) {
   const wheres = Object.keys(data)
     .map((k) => ` ${k} = ? `)
     .join(' AND ')
@@ -394,7 +394,7 @@ export function dbSelect(table: string, data: Record<string, any>) {
   return toStmt(rawSql).all(...Object.values(data))
 }
 
-export function dbSelectOne(table: string, data: Record<string, any>) {
+function dbSelectOne(table: string, data: Record<string, any>) {
   const wheres = Object.keys(data)
     .map((k) => ` ${k} = ? `)
     .join(' AND ')
@@ -402,11 +402,7 @@ export function dbSelectOne(table: string, data: Record<string, any>) {
   return toStmt(rawSql).get(...Object.values(data))
 }
 
-export function dbUpdate(
-  table: string,
-  pkField: string,
-  data: Record<string, any>
-) {
+function dbUpdate(table: string, pkField: string, data: Record<string, any>) {
   if (!data[pkField]) {
     throw new Error(`must provide ${pkField} to update ${table}`)
   }

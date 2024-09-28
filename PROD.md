@@ -1,48 +1,19 @@
+* Install [nodejs](https://deb.nodesource.com/)
+* Setup a [Cloudflare Tunne](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-local-tunnel/)
+
+
+Make Restart-able:
+
 ```bash
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash
+pm2 startup
+# copy paste the line as instructed
+pm2 save
+```
 
-# source ~/.bashrc
-# clone audius repo
+## deploy
 
-cd audius-protocol
-nvm install
-
-sudo apt install -y python3 make g++ curl bash git
-
-CI=true npm i
-
-npm run sdk
-
-cd packages/ddex/procesor
-
-npx tsx cli server
-
-# or
-# npx pm2 start 'npm start'
-
-# also setup pm2 to run on boot:
-# https://pm2.keymetrics.io/docs/usage/startup/
-
+```bash
+make
 ```
 
 
-setup `/etc/caddy/Caddyfile` like:
-
-```
-{
-    servers :443 {
-        protocols h1
-    }
-}
-
-ddex2.staging.audius.co
-
-reverse_proxy "localhost:8989"
-```
-
-
-setup .env with:
-
-```
-DDEX_URL='https://ddex2.staging.audius.co'
-```

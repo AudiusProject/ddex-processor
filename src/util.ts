@@ -7,6 +7,10 @@ export async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+export function lowerAscii(text: string) {
+  return text.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
 export function parseBool(b: string | undefined): boolean {
   if (!b) return false
   b = b.toLowerCase().trim()

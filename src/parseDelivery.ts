@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { releaseRepo, userRepo, xmlRepo } from './db'
 import { sources } from './sources'
-import { omitEmpty } from './util'
+import { lowerAscii, omitEmpty } from './util'
 
 type CH = cheerio.Cheerio<Element>
 
@@ -628,6 +628,12 @@ export function parseReleaseIds($el: CH): DDEXReleaseIds {
   })
 }
 
+const genreMapping: Record<string, Genre> = {
+  Dance: Genre.ELECTRONIC,
+  'Indie Rock': Genre.ALTERNATIVE,
+  Inspirational: Genre.AMBIENT,
+}
+
 function resolveAudiusGenre(
   genre: string,
   subgenre: string
@@ -638,23 +644,17 @@ function resolveAudiusGenre(
 
   // first try subgenre, then genre
   for (let searchTerm of [subgenre, genre]) {
-    searchTerm = searchTerm.toLowerCase()
+    searchTerm = lowerAscii(searchTerm)
     for (const v of Object.values(Genre)) {
-      if (v.toLowerCase() == searchTerm) {
+      if (lowerAscii(v) == searchTerm) {
         return v
       }
     }
   }
 
   // hard code some genre matching??
-  if (genre == 'Dance') {
-    return Genre.ELECTRONIC
-  }
-  if (genre == 'Indie Rock') {
-    return Genre.ALTERNATIVE
-  }
-  if (genre == 'Inspirational') {
-    return Genre.AMBIENT
+  if (genreMapping[genre]) {
+    return genreMapping[genre]
   }
 
   // maybe try some edit distance magic?

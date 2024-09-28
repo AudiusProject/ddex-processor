@@ -1,0 +1,14 @@
+{
+  "sources": [
+    {
+      "env": "staging",
+      "name": "sourceA",
+      "ddexKey": "",
+      "ddexSecret": "",
+      "awsKey": "",
+      "awsSecret": "",
+      "awsRegion": "",
+      "awsBucket": ""
+    }
+  ]
+}

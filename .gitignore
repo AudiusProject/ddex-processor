@@ -1,0 +1,5 @@
+.env
+s3stuff
+*.db*
+sources.json
+node_modules

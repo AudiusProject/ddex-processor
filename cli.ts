@@ -8,6 +8,7 @@ import { pollS3 } from './src/s3poller'
 import { sync } from './src/s3sync'
 import { startServer } from './src/server'
 import { sources } from './src/sources'
+import { startUsersPoller } from './src/usersPoller'
 import { sleep } from './src/util'
 
 sources.load()
@@ -80,12 +81,14 @@ program.command('cleanup').description('remove temp files').action(cleanupFiles)
 program.parse()
 
 async function startWorker() {
+  startUsersPoller().catch(console.error)
+
   // eslint-disable-next-line no-constant-condition
   while (true) {
     await sleep(3_000)
     console.log('polling...')
     await pollS3()
     await publishValidPendingReleases()
-    await sleep(30_000)
+    await sleep(60_000)
   }
 }

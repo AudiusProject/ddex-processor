@@ -188,6 +188,12 @@ export const xmlRepo = {
     return db.get<XmlRow>(sql`select * from xmls where xmlUrl = ${xmlUrl}`)
   },
 
+  find(query: string) {
+    return db.all<XmlRow>(
+      sql`select * from xmls where xmlUrl like '%' || ${query} || '%' order by xmlUrl`
+    )
+  },
+
   upsert(row: Partial<XmlRow>) {
     dbUpsert('xmls', row)
   },
@@ -272,8 +278,12 @@ export const releaseRepo = {
 
       // if prior exists and is newer, skip
       if (prior && prior.messageTimestamp > messageTimestamp) {
-        console.log(`skipping ${xmlUrl} because ${key} is newer`)
-        return
+        // For now we let older submissions update...
+        // When UpdateMessage is properly supported,
+        // we'll want to exit here.
+        //
+        // console.log(`skipping ${xmlUrl} because ${key} is newer`)
+        // return
       }
 
       // if same xmlUrl + json, skip

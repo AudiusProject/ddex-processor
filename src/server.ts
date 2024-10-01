@@ -25,7 +25,6 @@ import {
 import { prepareAlbumMetadata, prepareTrackMetadatas } from './publishRelease'
 import { readAssetWithCaching } from './s3poller'
 import { sources } from './sources'
-import { startUsersPoller } from './usersPoller'
 import { parseBool, simulateDeliveryForUserName } from './util'
 
 // read env
@@ -55,7 +54,7 @@ app.get('/', async (c) => {
   return c.html(
     Layout(html`
       <div class="container">
-        <h1>ddexer</h1>
+        <h1>Audius DDEX</h1>
 
         ${c.req.query('loginRequired')
           ? html`<mark>Please login to continue</mark><br />`
@@ -516,7 +515,7 @@ app.get('/users', (c) => {
                   <td>${user.name}</td>
                   <td>
                     <b title="${user.apiKey}"
-                      >${sources.findByApiKey(user.apiKey).name}</b
+                      >${sources.findByApiKey(user.apiKey)?.name}</b
                     >
                   </td>
                   <td>${user.createdAt}</td>
@@ -634,13 +633,17 @@ function Layout(
           .bold {
             font-weight: bold;
           }
+          .topbar {
+            display: flex; gap: 10px; padding: 10px;
+          }
+          .topbar a {
+            text-decoration: none;
+          }
         </style>
       </head>
       <body>
-        <div style="display: flex; gap: 15px; padding: 10px;">
-          <b>ddex</b>
-          <a href="/">home</a>
-          <a href="/auth/whoami">whoami</a>
+        <div class="topbar">
+          <a href="/"><b>ddex</b></a>
           <a href="/releases">releases</a>
           <a href="/users">users</a>
         </div>
@@ -658,8 +661,6 @@ export function startServer() {
     fetch: app.fetch,
     port,
   })
-
-  startUsersPoller().catch(console.error)
 }
 
 // for:

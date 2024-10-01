@@ -197,6 +197,7 @@ export function parseDdexXml(source: string, xmlUrl: string, xmlText: string) {
     'PurgeReleaseMessage',
     'ManifestMessage',
   ].find((n) => rawTagName.includes(n))
+  const isUpdate = $('UpdateIndicator').text() == 'UpdateMessage'
 
   // todo: would be nice to skip this on reParse
   xmlRepo.upsert({
@@ -207,12 +208,16 @@ export function parseDdexXml(source: string, xmlUrl: string, xmlText: string) {
   })
 
   if (tagName == 'ManifestMessage') {
-    console.log('todo: batch')
+    // don't care about batch.
   } else if (tagName == 'PurgeReleaseMessage') {
     // mark release rows as DeletePending
     const { releaseIds } = parsePurgeXml($)
     releaseRepo.markForDelete(source, xmlUrl, messageTimestamp, releaseIds)
   } else if (tagName == 'NewReleaseMessage') {
+    if (isUpdate) {
+      console.log('TODO: handle updates.  Skipping update', xmlUrl)
+      return
+    }
     // create or replace this release in db
     const releases = parseReleaseXml(source, $)
     for (const release of releases) {

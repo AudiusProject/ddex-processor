@@ -49,7 +49,6 @@ export const sources = {
 
   findByApiKey(apiKey: string) {
     const found = sourceList.find((s) => s.ddexKey == apiKey)
-    if (!found) throw new Error(`unable to find source for apiKey: ${apiKey}`)
     return found
   },
 }

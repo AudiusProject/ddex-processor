@@ -1,10 +1,12 @@
 import 'dotenv/config'
 
 import { serve } from '@hono/node-server'
+import { serveStatic } from '@hono/node-server/serve-static'
 import { fromBuffer as fileTypeFromBuffer } from 'file-type'
 import { Context, Hono } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
 import { html } from 'hono/html'
+import { FC } from 'hono/jsx'
 import { decode } from 'hono/jwt'
 import { prettyJSON } from 'hono/pretty-json'
 import { HtmlEscapedString } from 'hono/utils/html'
@@ -47,6 +49,7 @@ const API_HOST = IS_PROD
 
 const app = new Hono()
 app.use(prettyJSON({ space: 4 }))
+app.use('/static/*', serveStatic({ root: './' }))
 
 app.get('/', async (c) => {
   const me = await getAudiusUser(c)
@@ -552,6 +555,27 @@ app.get('/users', (c) => {
           </tbody>
         </table> `
     )
+  )
+})
+
+const Layout2: FC = (props) => {
+  return (
+    <html>
+      <head>
+        <title>{props.title || 'DDEX'}</title>
+        <link rel="stylesheet" href="/static/font.css" />
+      </head>
+      <h1>Layout</h1>
+      <body>{props.children}</body>
+    </html>
+  )
+}
+
+app.get('/yo', (c) => {
+  return c.html(
+    <Layout2>
+      <h2>Yo Dogg 123</h2>
+    </Layout2>
   )
 })
 

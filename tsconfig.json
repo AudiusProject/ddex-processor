@@ -1,13 +1,12 @@
 {
   "compilerOptions": {
-    "lib": ["es2021"],
-    "target": "es2016",
-    "module": "commonjs",
-    "outDir": "./dist",
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "strict": true,
-    "skipLibCheck": true
-  },
-  "exclude": ["node_modules"]
+    "skipLibCheck": true,
+    "types": ["node"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx"
+  }
 }

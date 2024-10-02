@@ -564,9 +564,9 @@ const Layout2: FC = (props) => {
       <head>
         <title>{props.title || 'DDEX'}</title>
         <link rel="stylesheet" href="/static/font.css" />
+        <link rel="stylesheet" href="/static/output.css" />
       </head>
-      <h1>Layout</h1>
-      <body>{props.children}</body>
+      <body class="bg-base-300 p-2">{props.children}</body>
     </html>
   )
 }
@@ -574,7 +574,9 @@ const Layout2: FC = (props) => {
 app.get('/yo', (c) => {
   return c.html(
     <Layout2>
-      <h2>Yo Dogg 123</h2>
+      <div class="max-w-md bg-base-100 mx-auto my-8 rounded shadow p-8">
+        <button class="btn btn-primary">Button!</button>
+      </div>
     </Layout2>
   )
 })

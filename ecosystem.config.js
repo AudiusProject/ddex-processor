@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'ddex',
       script: 'npm',
-      args: 'run start:prod',
+      args: 'start',
     },
     {
       name: 'tunnel',

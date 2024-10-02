@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Avenir Next LT Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+.btn {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: none;
+  }
+}
+
+.cool {
+  background: red;
+}

@@ -657,18 +657,12 @@ export function startServer() {
   const port = 8989
   console.log(`Server is running on port ${port}`)
 
-  serve({
+  const server = serve({
     fetch: app.fetch,
     port,
   })
-}
 
-// for:
-// https://github.com/honojs/node-server/issues/167
-process
-  .on('unhandledRejection', (reason, p) => {
-    console.error('unhandledRejection', reason, 'promise', p)
-  })
-  .on('uncaughtException', (err) => {
-    console.error('unhandledRejection', err)
-  })
+  // shutdown
+  process.once('SIGTERM', () => server.close())
+  process.once('SIGINT', () => server.close())
+}

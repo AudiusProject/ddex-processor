@@ -1,8 +1,11 @@
-* filter by source in UI
+# TODO
+
+* filter by source in UI / artist / etc.
 * source payout wallet config
+* zero downtime deploy: [graceful shutdown](https://pm2.keymetrics.io/docs/usage/signals-clean-restart/) + [cluster mode](https://pm2.keymetrics.io/docs/usage/cluster-mode/#cluster-mode)
 
 
-## TODO: Support UpdateMessage
+## Support UpdateMessage
 
 Currently processing assumes the media files are co-located with the XML... but not so with updates.
 When UpdateIndicator=UpdateMessage XML is submitted... it won't have the sound files or image files.
@@ -22,3 +25,13 @@ somesource,8010203,SoundRecording,A1,s3://somesource-prod-raw/a/b/c/A1.jpeg
 
 - write a function to resolve ref via `(source,releaseId,colleciton,ref)`.
   The `collection` bit might not be fully necessary as all examples thus far have had unique refs across collections... but you never know.
+
+
+
+## Clean Shutdown for Publisher
+
+Related to zero downtime deploy...
+
+* pm2 in cluster mode should start new process + signal old process to exit
+* SIGINT handler should keep app alive till any in-flight publish is complete
+* configure long exit timeout to allow this.

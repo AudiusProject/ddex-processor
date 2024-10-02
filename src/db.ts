@@ -441,3 +441,11 @@ function dbUpsert(table: string, data: Record<string, any>) {
 function ifdef(obj: any, snippet: any) {
   return obj ? snippet : sql``
 }
+
+// shutdown
+process.once('SIGTERM', () => {
+  db.close()
+})
+process.once('SIGINT', () => {
+  db.close()
+})

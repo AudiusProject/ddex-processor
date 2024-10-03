@@ -214,6 +214,7 @@ export const xmlRepo = {
 type FindReleaseParams = {
   pendingPublish?: boolean
   status?: string
+  source?: string
 }
 
 export const releaseRepo = {
@@ -250,6 +251,8 @@ export const releaseRepo = {
       )}
 
       $${ifdef(params.status, sql` and status = ${params.status} `)}
+
+      $${ifdef(params.source, sql` and source = ${params.source} `)}
 
       order by messageTimestamp desc
     `)

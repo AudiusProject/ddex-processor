@@ -179,8 +179,10 @@ app.use('*', async (c, next) => {
 
 app.get('/releases', (c) => {
   const queryStatus = c.req.query('status')
+  const querySource = c.req.query('source')
   const rows = releaseRepo.all({
     status: queryStatus,
+    source: querySource,
     pendingPublish: parseBool(c.req.query('pendingPublish')),
   })
 
@@ -191,19 +193,26 @@ app.get('/releases', (c) => {
 
         <div style="display: flex; gap: 10px;">
           <!-- filters -->
-          <form>
-            <select
-              name="status"
-              aria-label="Select"
-              onchange="this.form.submit()"
-            >
-              <option selected value="">All</option>
+          <form style="display: flex; gap: 10px;">
+            <select name="status" onchange="this.form.submit()">
+              <option selected value="">Status</option>
               ${Object.values(ReleaseProcessingStatus).map(
                 (s) =>
                   html`<option ${queryStatus == s ? 'selected' : ''}>
                     ${s}
                   </option>`
               )}
+            </select>
+            <select name="source" onchange="this.form.submit()">
+              <option selected value="">Source</option>
+              ${sources
+                .all()
+                .map(
+                  (s) =>
+                    html`<option ${querySource == s.name ? 'selected' : ''}>
+                      ${s.name}
+                    </option>`
+                )}
             </select>
           </form>
 

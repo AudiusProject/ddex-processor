@@ -45,6 +45,7 @@ const IS_PROD = NODE_ENV == 'production'
 const API_HOST = IS_PROD
   ? 'https://discoveryprovider2.audius.co'
   : 'https://discoveryprovider2.staging.audius.co'
+const AUDIUS_HOST = IS_PROD ? 'https://audius.co' : 'https://staging.audius.co'
 
 export type Variables = {
   me: Awaited<ReturnType<typeof getAudiusUser>>
@@ -256,14 +257,17 @@ app.get('/releases', (c) => {
                     >
                       ${row._parsed?.title}
                     </a>
-                    <br />
+                    <div>
+                      ${row._parsed?.audiusUser
+                        ? audiusUserLink(row._parsed?.audiusUser)
+                        : row._parsed?.artists[0]?.name}
+                    </div>
                     <small>
-                      ${row._parsed?.artists[0]?.name}
                       <em
                         title="${row.messageTimestamp}"
                         class="pico-color-grey-500"
                       >
-                        via ${row.source}
+                        ${row._parsed?.labelName} via ${row.source}
                       </em>
                     </small>
                   </td>
@@ -633,6 +637,19 @@ async function getAudiusUser(c: Context) {
   const me = JSON.parse(j) as JwtUser
   me.isAdmin = ADMIN_HANDLES.includes(me.handle.toLowerCase())
   return me
+}
+
+function audiusUserLink(id: string) {
+  const user = userRepo.findOne({ id })
+  if (!user) {
+    return html`User ${id} not in database`
+  }
+  return html`<a
+    href="${AUDIUS_HOST}/${user.handle}"
+    title="${user.handle}"
+    target="_blank"
+    >${user.name}</a
+  >`
 }
 
 function Layout(

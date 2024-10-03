@@ -6,6 +6,7 @@ import {
 } from '@aws-sdk/client-s3'
 import { mkdir, readFile, stat, writeFile } from 'fs/promises'
 import { basename, dirname, join, resolve } from 'path'
+import sharp from 'sharp'
 import { s3markerRepo } from './db'
 import { parseDdexXml } from './parseDelivery'
 import { SourceConfig, sources } from './sources'
@@ -116,7 +117,8 @@ async function scanS3Prefix(
 export async function readAssetWithCaching(
   xmlUrl: string,
   filePath: string,
-  fileName: string
+  fileName: string,
+  imageSize: string = ''
 ) {
   // read from s3 + cache to local disk
   if (xmlUrl.startsWith('s3:')) {
@@ -124,7 +126,9 @@ export async function readAssetWithCaching(
     const s3url = new URL(`${filePath}${fileName}`, xmlUrl)
     const Bucket = s3url.host
     const Key = s3url.pathname.substring(1)
-    const destinationPath = join(cacheBaseDir, Bucket, Key)
+    const destinationPath = join(
+      ...[cacheBaseDir, Bucket, imageSize, Key].filter(Boolean)
+    )
 
     // fetch if needed
     const exists = await fileExists(destinationPath)
@@ -133,7 +137,14 @@ export async function readAssetWithCaching(
       const s3 = dialS3(source)
       await mkdir(dirname(destinationPath), { recursive: true })
       const { Body } = await s3.send(new GetObjectCommand({ Bucket, Key }))
-      await writeFile(destinationPath, Body as any)
+      const parsedSize = parseInt(imageSize)
+      if (parsedSize) {
+        await sharp(await Body!.transformToByteArray())
+          .resize(parsedSize, parsedSize)
+          .toFile(destinationPath)
+      } else {
+        await writeFile(destinationPath, Body as any)
+      }
     }
 
     return readFileToBuffer(destinationPath)

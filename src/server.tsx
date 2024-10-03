@@ -232,10 +232,15 @@ app.get('/releases', (c) => {
             ${rows.map(
               (row) =>
                 html` <tr>
-                  <td title="${row.messageTimestamp}">
-                    <small>${row.source}</small>
+                  <td style="min-width: 80px;">
+                    <img
+                      src="/release/${row.key}/images/${row._parsed?.images[0]
+                        ?.ref}/200"
+                      width="80"
+                      height="80"
+                    />
                   </td>
-                  <td style="white-space: wrap">
+                  <td class="truncate">
                     <a
                       href="/releases/${encodeURIComponent(row.key)}"
                       style="font-weight: bold; text-decoration: none;"
@@ -243,7 +248,15 @@ app.get('/releases', (c) => {
                       ${row._parsed?.title}
                     </a>
                     <br />
-                    <small>${row._parsed?.artists[0]?.name}</small>
+                    <small>
+                      ${row._parsed?.artists[0]?.name}
+                      <em
+                        title="${row.messageTimestamp}"
+                        class="pico-color-grey-500"
+                      >
+                        via ${row.source}
+                      </em>
+                    </small>
                   </td>
 
                   <td>
@@ -333,7 +346,8 @@ app.get('/releases/:key', (c) => {
         <div style="display: flex; gap: 20px">
           <div style="text-align: center">
             <img
-              src="/release/${row.key}/images/${parsedRelease.images[0]?.ref}"
+              src="/release/${row.key}/images/${parsedRelease.images[0]
+                ?.ref}/200"
               style="width: 200px; height: 200px; display: block; margin-bottom: 10px"
             />
             <mark>${parsedRelease.parentalWarningType}</mark>
@@ -412,10 +426,11 @@ app.get('/releases/:key', (c) => {
   )
 })
 
-app.get('/release/:key/:type/:ref/:name?', async (c) => {
+app.get('/release/:key/:type/:ref/:size?', async (c) => {
   const key = c.req.param('key')!
   const type = c.req.param('type')
   const ref = c.req.param('ref')
+  const size = c.req.param('size')
   const row = releaseRepo.get(key)
   if (!row) return c.json({ error: 'not found' }, 404)
 
@@ -427,7 +442,8 @@ app.get('/release/:key/:type/:ref/:name?', async (c) => {
   const ok = await readAssetWithCaching(
     row.xmlUrl,
     asset.filePath,
-    asset.fileName
+    asset.fileName,
+    size
   )
 
   // some mime stuff
@@ -650,6 +666,12 @@ function Layout(
           }
           .topbar a {
             text-decoration: none;
+          }
+          .truncate {
+            max-width: 300px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
         </style>
       </head>

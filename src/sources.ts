@@ -36,7 +36,6 @@ export const sources = {
 
   findByName(name: string) {
     const found = sourceList.find((s) => s.name == name)
-    if (!found) throw new Error(`unable to find source for name: ${name}`)
     return found
   },
 

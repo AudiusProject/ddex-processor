@@ -6,13 +6,12 @@ import { fromBuffer as fileTypeFromBuffer } from 'file-type'
 import { Context, Hono } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
 import { html } from 'hono/html'
-import { FC } from 'hono/jsx'
 import { decode } from 'hono/jwt'
 import { prettyJSON } from 'hono/pretty-json'
 import { HtmlEscapedString } from 'hono/utils/html'
+import { cool } from './_cool'
 import {
   ReleaseProcessingStatus,
-  ReleaseRow,
   kvRepo,
   releaseRepo,
   userRepo,
@@ -47,12 +46,20 @@ const API_HOST = IS_PROD
   ? 'https://discoveryprovider2.audius.co'
   : 'https://discoveryprovider2.staging.audius.co'
 
-const app = new Hono()
+export type Variables = {
+  me: Awaited<ReturnType<typeof getAudiusUser>>
+}
+const app = new Hono<{ Variables: Variables }>()
 app.use(prettyJSON({ space: 4 }))
 app.use('/static/*', serveStatic({ root: './' }))
 
+app.use(async (c, next) => {
+  c.set('me', await getAudiusUser(c))
+  await next()
+})
+
 app.get('/', async (c) => {
-  const me = await getAudiusUser(c)
+  const me = c.get('me')
 
   return c.html(
     Layout(html`
@@ -88,6 +95,9 @@ app.get('/', async (c) => {
 app.get('/auth/source/:sourceName', (c) => {
   const sourceName = c.req.param('sourceName')
   const source = sources.findByName(sourceName)
+  if (!source) {
+    return c.text(`no source named: ${sourceName}`, 400)
+  }
   const myUrl = DDEX_URL || 'http://localhost:8989'
   const base = IS_PROD
     ? 'https://audius.co/oauth/auth?'
@@ -142,13 +152,13 @@ app.get('/auth/redirect', async (c) => {
 // ====================== AUTH REQUIRED ======================
 
 app.use('*', async (c, next) => {
-  const me = await getAudiusUser(c)
+  const me = c.get('me')
   if (!me) return c.redirect('/?loginRequired=true')
   await next()
 })
 
 app.get('/auth/whoami', async (c) => {
-  const me = await getAudiusUser(c)
+  const me = c.get('me')
   return c.json({ me })
 })
 
@@ -160,8 +170,8 @@ app.get('/auth/logout', async (c) => {
 // ====================== ADMIN REQUIRED ======================
 
 app.use('*', async (c, next) => {
-  const me = await getAudiusUser(c)
-  if (!me || !ADMIN_HANDLES.includes(me.handle.toLowerCase())) {
+  const me = c.get('me')
+  if (!me?.isAdmin) {
     return c.text('you are not admin')
   }
   await next()
@@ -173,21 +183,6 @@ app.get('/releases', (c) => {
     status: queryStatus,
     pendingPublish: parseBool(c.req.query('pendingPublish')),
   })
-
-  let lastXmlUrl = ''
-  const xmlSpacer = (row: ReleaseRow) => {
-    if (row.xmlUrl != lastXmlUrl) {
-      lastXmlUrl = row.xmlUrl
-      return html`<tr>
-        <td colspan="10">
-          <div style="margin-top: 20px;">
-            <kbd>${row.source}</kbd>
-            <kbd>${row.xmlUrl}</kbd>
-          </div>
-        </td>
-      </tr>`
-    }
-  }
 
   return c.html(
     Layout(
@@ -224,80 +219,88 @@ app.get('/releases', (c) => {
           <thead>
             <tr>
               <th></th>
-              <th>Key</th>
-              <th>Type</th>
               <th>Artist</th>
-              <th>Title</th>
               <th>Genre</th>
+              <th>Release</th>
               <th>Status</th>
-              <th>Publish Errors</th>
-              <th>Published?</th>
+              <th></th>
+              <th></th>
               <th>debug</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody style="line-height: 1; white-space: nowrap;">
             ${rows.map(
               (row) =>
-                html` ${xmlSpacer(row)}
-                  <tr>
-                    <td class="${row._parsed?.isMainRelease ? 'bold' : ''}">
-                      ${row._parsed?.ref}
-                    </td>
-                    <td>
-                      <a href="/releases/${encodeURIComponent(row.key)}"
-                        >${row.key}</a
-                      >
-                    </td>
-                    <td>${row._parsed?.releaseType}</td>
-                    <td>
-                      ${row._parsed?.audiusUser ||
-                      row._parsed?.artists[0]?.name}
-                    </td>
-                    <td>${row._parsed?.title}</td>
-                    <td>${row._parsed?.audiusGenre}</td>
-                    <td>
-                      <mark><b>${row.status}</b></mark>
-                      ${row._parsed?.problems?.map(
-                        (p) => html`<mark>${p}</mark>`
-                      )}
-                    </td>
-                    <td>
-                      ${row.publishErrorCount > 0 &&
-                      html`<a
-                        href="/releases/${encodeURIComponent(row.key)}/error"
-                        >${row.publishErrorCount}</a
-                      >`}
-                    </td>
-                    <td>
-                      ${row.entityType == 'track' &&
-                      html` <a
-                        href="${API_HOST}/v1/full/tracks/${row.entityId}"
-                      >
-                        ${row.entityId}
-                      </a>`}
-                      ${row.entityType == 'album' &&
-                      html` <a
-                        href="${API_HOST}/v1/full/playlists/${row.entityId}"
-                      >
-                        ${row.entityId}
-                      </a>`}
-                    </td>
-                    <td>
-                      <a href="/xmls/${encodeURIComponent(row.xmlUrl)}">xml</a>
+                html` <tr>
+                  <td title="${row.messageTimestamp}">
+                    <small>${row.source}</small>
+                  </td>
+                  <td style="white-space: wrap">
+                    <a
+                      href="/releases/${encodeURIComponent(row.key)}"
+                      style="font-weight: bold; text-decoration: none;"
+                    >
+                      ${row._parsed?.title}
+                    </a>
+                    <br />
+                    <small>${row._parsed?.artists[0]?.name}</small>
+                  </td>
 
-                      <a
-                        href="/releases/${encodeURIComponent(
-                          row.key
-                        )}/json?pretty"
-                        >parsed</a
-                      >
+                  <td>
+                    ${row._parsed?.genre} <br />
+                    <small>${row._parsed?.subGenre}</small>
+                  </td>
+                  <td>
+                    ${row.releaseType}
+                    <small> (${row._parsed?.soundRecordings.length})</small>
+                    <br />
+                    <small>${row.releaseDate}</small>
+                  </td>
+                  <td>
+                    ${row.status}<br />
+                    ${row._parsed?.problems?.map(
+                      (p) => html`<small>${p} </small>`
+                    )}
+                  </td>
+                  <td>
+                    ${row.publishErrorCount > 0 &&
+                    html`<a
+                      href="/releases/${encodeURIComponent(row.key)}/error"
+                      >${row.publishErrorCount}</a
+                    >`}
+                  </td>
+                  <td>
+                    ${row.entityType == 'track' &&
+                    html` <a href="${API_HOST}/v1/full/tracks/${row.entityId}">
+                      ${row.entityId}
+                    </a>`}
+                    ${row.entityType == 'album' &&
+                    html` <a
+                      href="${API_HOST}/v1/full/playlists/${row.entityId}"
+                    >
+                      ${row.entityId}
+                    </a>`}
+                  </td>
+                  <td>
+                    <a
+                      href="/xmls/${encodeURIComponent(row.xmlUrl)}"
+                      target="_blank"
+                      >xml</a
+                    >
 
-                      <a
-                        href="/xmls/${encodeURIComponent(row.xmlUrl)}?parse=sdk"
-                        >sdk</a
-                      >
-                    </td>
-                  </tr>`
+                    <a
+                      href="/releases/${encodeURIComponent(
+                        row.key
+                      )}/json?pretty"
+                      target="_blank"
+                      >parsed</a
+                    >
+
+                    <a href="/xmls/${encodeURIComponent(row.xmlUrl)}?parse=sdk"
+                      >sdk</a
+                    >
+                  </td>
+                </tr>`
             )}
           </tbody>
         </table>
@@ -337,7 +340,7 @@ app.get('/releases/:key', (c) => {
           </div>
 
           <div style="flex-grow: 1">
-            <h3>${parsedRelease.title}</h3>
+            <h3 style="margin-bottom: 0">${parsedRelease.title}</h3>
             <h5>
               ${parsedRelease.artists
                 .slice(0, 1)
@@ -361,12 +364,11 @@ app.get('/releases/:key', (c) => {
                   </div>
                   <div style="flex-grow: 1">
                     <div>
-                      <a href="/release/${row.key}/soundRecordings/${sr.ref}">
-                        <h4 style="margin-top: 10px">${sr.title}</h4>
-                      </a>
+                      <h4 style="margin-bottom: 0">${sr.title}</h4>
+                      <em>${sr.artists[0]?.name}</em>
                     </div>
 
-                    <div style="margin-left: 10px">
+                    <div style="margin-left: 10px; display: none">
                       <h6>Artists</h6>
                       <ul>
                         ${sr.artists.map(mapArtist)}
@@ -558,28 +560,7 @@ app.get('/users', (c) => {
   )
 })
 
-const Layout2: FC = (props) => {
-  return (
-    <html>
-      <head>
-        <title>{props.title || 'DDEX'}</title>
-        <link rel="stylesheet" href="/static/font.css" />
-        <link rel="stylesheet" href="/static/output.css" />
-      </head>
-      <body class="bg-base-300 p-2">{props.children}</body>
-    </html>
-  )
-}
-
-app.get('/yo', (c) => {
-  return c.html(
-    <Layout2>
-      <div class="max-w-md bg-base-100 mx-auto my-8 rounded shadow p-8">
-        <button class="btn btn-primary">Button!</button>
-      </div>
-    </Layout2>
-  )
-})
+app.route('/cool', cool)
 
 app.get('/users/simulate/:apiKey/:id', async (c) => {
   if (IS_PROD) {
@@ -604,7 +585,7 @@ app.get('/users/simulate/:apiKey/:id', async (c) => {
   return c.redirect('/releases')
 })
 
-type JwtUser = {
+export type JwtUser = {
   userId: string
   email: string
   name: string
@@ -616,12 +597,17 @@ type JwtUser = {
     '1000x1000': string
   }
   apiKey: string
+
+  // added stuff
+  isAdmin: boolean
 }
 
 async function getAudiusUser(c: Context) {
   const j = await getSignedCookie(c, COOKIE_SECRET!, COOKIE_NAME)
   if (!j) return
-  return JSON.parse(j) as JwtUser
+  const me = JSON.parse(j) as JwtUser
+  me.isAdmin = ADMIN_HANDLES.includes(me.handle.toLowerCase())
+  return me
 }
 
 function Layout(
@@ -654,7 +640,7 @@ function Layout(
             --pico-font-weight: 700;
           }
           mark {
-            margin-right: 5px;
+            margin-right: 3px;
           }
           .bold {
             font-weight: bold;

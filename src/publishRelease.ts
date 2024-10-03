@@ -16,6 +16,9 @@ export async function publishValidPendingReleases() {
 
   for (const row of rows) {
     const source = sources.findByName(row.source)
+    if (!source) {
+      continue
+    }
     const sdk = getSdk(source)
     const parsed = row._parsed!
 

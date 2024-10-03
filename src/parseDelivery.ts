@@ -489,7 +489,8 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
       const releaseDate =
         validityStartDate ||
         $el.find('ReleaseDate').text() ||
-        $el.find('GlobalOriginalReleaseDate').text()
+        $el.find('GlobalOriginalReleaseDate').text() ||
+        $el.find('OriginalReleaseDate').text()
 
       const [genre, subGenre] = parseGenres($el)
 
@@ -531,7 +532,9 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
       // resolve audius user (that has authorized this source)
       const artistNames = release.artists.map((a) => a.name)
       const sourceConfig = sources.findByName(source)
-      release.audiusUser = userRepo.match(sourceConfig.ddexKey, artistNames)
+      if (sourceConfig) {
+        release.audiusUser = userRepo.match(sourceConfig.ddexKey, artistNames)
+      }
       if (!release.audiusUser) {
         release.problems.push(`NoUser`)
       }

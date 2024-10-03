@@ -63,7 +63,9 @@ create table if not exists s3markers (
     key text primary key,
     val text not null
   );
-  `
+  `,
+  sql`alter table releases add column releaseType text;`,
+  sql`alter table releases add column releaseDate text;`
 )
 
 export type XmlRow = {
@@ -96,6 +98,8 @@ export type ReleaseRow = {
   key: string
   xmlUrl: string
   messageTimestamp: string
+  releaseType: string
+  releaseDate: string
   json: string
   status: ReleaseProcessingStatus
   createdAt: string
@@ -189,9 +193,13 @@ export const xmlRepo = {
   },
 
   find(query: string) {
-    return db.all<XmlRow>(
-      sql`select * from xmls where xmlUrl like '%' || ${query} || '%' order by xmlUrl`
+    const xmls = db.all<XmlRow>(
+      sql`
+        select * from xmls
+        where xmlUrl like '%' || ${query} || '%'
+        order by messageTimestamp desc`
     )
+    return xmls
   },
 
   upsert(row: Partial<XmlRow>) {
@@ -227,7 +235,7 @@ export const releaseRepo = {
     params ||= {}
     const rows = db.all<ReleaseRow>(sql`
       select * from releases
-      where 1=1
+      where releaseType != 'TrackRelease'
 
       -- pending publish
       $${ifdef(
@@ -243,7 +251,7 @@ export const releaseRepo = {
 
       $${ifdef(params.status, sql` and status = ${params.status} `)}
 
-      order by xmlUrl, ref
+      order by messageTimestamp desc
     `)
 
     for (const row of rows) {
@@ -289,9 +297,9 @@ export const releaseRepo = {
       // if same xmlUrl + json, skip
       // may want some smarter json compare here
       // if this is causing spurious sdk updates to be issued
-      if (prior && prior.xmlUrl == xmlUrl && prior.json == json) {
-        return
-      }
+      // if (prior && prior.xmlUrl == xmlUrl && prior.json == json) {
+      //   return
+      // }
 
       let status: ReleaseRow['status'] = release.problems.length
         ? ReleaseProcessingStatus.Blocked
@@ -308,6 +316,8 @@ export const releaseRepo = {
         key,
         status,
         ref: release.ref,
+        releaseType: release.releaseType,
+        releaseDate: release.releaseDate,
         xmlUrl,
         messageTimestamp,
         json,

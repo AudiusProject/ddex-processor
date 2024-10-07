@@ -123,7 +123,7 @@ cool.get('/releases', (c) => {
   return c.html(
     <Layout me={c.get('me')}>
       <div class="">
-        <table class="table table-pin-rows">
+        <table class="table table-pin-rows m-4">
           <thead>
             <tr>
               <th>Source</th>
@@ -136,12 +136,27 @@ cool.get('/releases', (c) => {
           <tbody>
             {rows.map((r) => (
               <tr>
-                <td>{r.source}</td>
+                <td style="min-width: 80px">
+                  <div class="rounded overflow-hidden">
+                    <img
+                      src={`/release/${r.key}/images/${r._parsed?.images[0]?.ref}/200`}
+                      width="80"
+                      height="80"
+                    />
+                  </div>
+                </td>
                 <td>
                   <b>{r._parsed?.title}</b>
                   <br />
                   {r._parsed?.artists[0]?.name}
+                  <br />
+                  <small>
+                    {r._parsed?.labelName}
+                    <em> via {r.source}</em>
+                  </small>
                 </td>
+                <td>{r.messageTimestamp}</td>
+                <td>{r.xmlUrl}</td>
               </tr>
             ))}
           </tbody>

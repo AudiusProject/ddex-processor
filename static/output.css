@@ -1425,6 +1425,10 @@ html {
   flex-grow: 1;
 }
 
+.overflow-hidden {
+  overflow: hidden;
+}
+
 .truncate {
   overflow: hidden;
   text-overflow: ellipsis;

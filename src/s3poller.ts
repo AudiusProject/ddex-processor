@@ -57,8 +57,11 @@ export async function pollS3(reset?: boolean) {
       })
     )
     const prefixes = result.CommonPrefixes?.map((p) => p.Prefix) as string[]
+    console.log(
+      `polling s3 ${bucket} from ${Marker} got ${prefixes?.length} items`
+    )
     if (!prefixes) {
-      return
+      continue
     }
 
     for (const prefix of prefixes) {

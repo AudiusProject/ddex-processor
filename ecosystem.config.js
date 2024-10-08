@@ -7,7 +7,7 @@ module.exports = {
     },
     {
       name: 'tunnel',
-      script: 'cloudflared tunnel run ddex-tunnel',
+      script: 'cloudflared tunnel run',
       autorestart: false,
     },
   ],

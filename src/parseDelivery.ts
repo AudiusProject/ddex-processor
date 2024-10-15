@@ -397,6 +397,17 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
     })
   })
 
+  // after parsing deals... if there is only a forDownload deal and no forStream deal
+  // mark the forDownload deal as forStream... which will make this a pay gated track.
+  // This is to support the most common version of `PayAsYouGoModel` deal xml.
+  for (const [_ref, dealList] of Object.entries(releaseDeals)) {
+    const forStream = dealList.find((d) => d.forStream)
+    const forDownload = dealList.find((d) => d.forDownload)
+    if (!forStream && forDownload) {
+      forDownload.forStream = true
+    }
+  }
+
   //
   // parse resources
   //

@@ -136,7 +136,7 @@ app.get('/auth/redirect', async (c) => {
     })
 
     // after user upsert, rescan for matches
-    reParsePastXml()
+    setTimeout(() => reParsePastXml(), 10)
 
     // set cookie
     const j = JSON.stringify(payload)

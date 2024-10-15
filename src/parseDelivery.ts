@@ -90,6 +90,7 @@ export type DDEXSoundRecording = {
     // rightShareUnknown: string
   }
   duration?: number
+  previewStartSeconds?: number
 
   audiusGenre?: Genre
 } & DDEXResource &
@@ -424,6 +425,9 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
       ),
       labelName: $el.find('LabelName').text(),
       duration: parseDuration($el.find('Duration').text()),
+      previewStartSeconds: parseInt(
+        $el.find('PreviewDetails > StartPoint').text()
+      ),
       genre: genre,
       subGenre: subGenre,
       releaseDate: $el

@@ -246,6 +246,10 @@ export function prepareTrackMetadatas(release: DDEXRelease) {
             meta.isDownloadGated = true
             meta.downloadConditions = cond
           }
+
+          if (sound.previewStartSeconds) {
+            meta.previewStartSeconds = sound.previewStartSeconds
+          }
         }
       }
 

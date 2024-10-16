@@ -1,14 +1,10 @@
-import {
-  AudiusSdk,
-  Genre,
-  UploadAlbumRequest,
-  UploadTrackRequest,
-} from '@audius/sdk'
+import { Genre, UploadAlbumRequest, UploadTrackRequest } from '@audius/sdk'
 import { ReleaseProcessingStatus, ReleaseRow, releaseRepo } from './db'
 import { DDEXContributor, DDEXRelease, DDEXResource } from './parseDelivery'
 import { readAssetWithCaching } from './s3poller'
 import { getSdk } from './sdk'
 import { SourceConfig, sources } from './sources'
+import { decodeId } from './util'
 
 export async function publishValidPendingReleases() {
   const rows = releaseRepo.all({ pendingPublish: true })
@@ -19,25 +15,24 @@ export async function publishValidPendingReleases() {
     if (!source) {
       continue
     }
-    const sdk = getSdk(source)
     const parsed = row._parsed!
 
     if (row.status == ReleaseProcessingStatus.DeletePending) {
       // delete
-      deleteRelease(sdk, row)
+      deleteRelease(source, row)
     } else if (row.entityId) {
       // update
       if (row.entityType == 'track') {
-        await updateTrack(sdk, row, parsed)
+        await updateTrack(source, row, parsed)
       } else if (row.entityType == 'album') {
-        await updateAlbum(sdk, row, parsed)
+        await updateAlbum(source, row, parsed)
       } else {
         console.log('unknown entity type', row.entityType)
       }
     } else {
       // create
       try {
-        await publishRelease(source, sdk, row, parsed)
+        await publishRelease(source, row, parsed)
       } catch (e: any) {
         console.log('failed to publish', row.key, e)
         releaseRepo.addPublishError(row.key, e)
@@ -48,7 +43,6 @@ export async function publishValidPendingReleases() {
 
 export async function publishRelease(
   source: SourceConfig,
-  sdk: AudiusSdk,
   releaseRow: ReleaseRow,
   release: DDEXRelease
 ) {
@@ -64,6 +58,8 @@ export async function publishRelease(
   if (!releaseRow.xmlUrl) {
     throw new Error(`xmlUrl is required to resolve file paths`)
   }
+
+  const sdk = getSdk(source)
 
   // read asset file
   async function resolveFile({ filePath, fileName }: DDEXResource) {
@@ -151,10 +147,11 @@ export async function publishRelease(
 }
 
 async function updateTrack(
-  sdk: AudiusSdk,
+  source: SourceConfig,
   row: ReleaseRow,
   release: DDEXRelease
 ) {
+  const sdk = getSdk(source)
   const metas = prepareTrackMetadatas(release)
 
   const result = await sdk.tracks.updateTrack({
@@ -233,9 +230,14 @@ export function prepareTrackMetadatas(release: DDEXRelease) {
         }
 
         if (deal.audiusDealType == 'PayGated') {
+          // todo: if source has a payout wallet...
+          // use that instead of individual artist user ID.
+          const payTo = decodeId(release.audiusUser!)
+
           const cond = {
             usdcPurchase: {
-              price: deal.priceUsd,
+              price: deal.priceUsd * 100,
+              splits: [{ user_id: payTo, percentage: 100 }],
             },
           }
           if (deal.forStream) {
@@ -266,11 +268,12 @@ export function prepareTrackMetadatas(release: DDEXRelease) {
 //
 
 async function updateAlbum(
-  sdk: AudiusSdk,
+  source: SourceConfig,
   row: ReleaseRow,
   release: DDEXRelease
 ) {
   const meta = prepareAlbumMetadata(release)
+  const sdk = getSdk(source)
 
   const result = await sdk.albums.updateAlbum({
     userId: release.audiusUser!,
@@ -288,7 +291,8 @@ async function updateAlbum(
   return result
 }
 
-export async function deleteRelease(sdk: AudiusSdk, r: ReleaseRow) {
+export async function deleteRelease(source: SourceConfig, r: ReleaseRow) {
+  const sdk = getSdk(source)
   const userId = r._parsed!.audiusUser!
   const entityId = r.entityId
 

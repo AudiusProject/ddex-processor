@@ -816,11 +816,6 @@ html {
 }
 
 @media (hover:hover) {
-  .label a:hover {
-    --tw-text-opacity: 1;
-    color: var(--fallback-bc,oklch(var(--bc)/var(--tw-text-opacity)));
-  }
-
   .table tr.hover:hover,
   .table tr.hover:nth-child(even):hover {
     --tw-bg-opacity: 1;
@@ -961,19 +956,6 @@ html {
   }
 }
 
-.label {
-  display: flex;
-  -webkit-user-select: none;
-     -moz-user-select: none;
-          user-select: none;
-  align-items: center;
-  justify-content: space-between;
-  padding-left: 0.25rem;
-  padding-right: 0.25rem;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
-}
-
 .link {
   cursor: pointer;
   text-decoration-line: underline;
@@ -1066,11 +1048,6 @@ html {
   --tw-bg-opacity: 0.1;
   color: var(--fallback-bc,oklch(var(--bc)/var(--tw-text-opacity)));
   --tw-text-opacity: 0.2;
-}
-
-.btm-nav > * .label {
-  font-size: 1rem;
-  line-height: 1.5rem;
 }
 
 @media (prefers-reduced-motion: no-preference) {

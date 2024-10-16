@@ -23,10 +23,14 @@ import {
   parseDdexXml,
   reParsePastXml,
 } from './parseDelivery'
-import { prepareAlbumMetadata, prepareTrackMetadatas } from './publishRelease'
+import {
+  prepareAlbumMetadata,
+  prepareTrackMetadatas,
+  publishRelease,
+} from './publishRelease'
 import { readAssetWithCaching } from './s3poller'
 import { sources } from './sources'
-import { parseBool, simulateDeliveryForUserName } from './util'
+import { parseBool } from './util'
 
 // read env
 const { NODE_ENV, DDEX_URL } = process.env
@@ -342,13 +346,16 @@ app.post('/releases/reparse', async (c) => {
 })
 
 app.get('/releases/:key', (c) => {
-  const row = releaseRepo.get(c.req.param('key'))
+  const releaseId = c.req.param('key')
+  const row = releaseRepo.get(releaseId)
   if (!row) return c.json({ error: 'not found' }, 404)
   if (c.req.query('json') != undefined) {
     return c.json(row)
   }
 
   const parsedRelease = row._parsed!
+
+  const allUsers = userRepo.all()
 
   const mapArtist = (c: DDEXContributor) =>
     html`<li><span>${c.name}</span>: <em>${c.role}</em></li>`
@@ -414,8 +421,37 @@ app.get('/releases/:key', (c) => {
               `
             )}
 
-            <audio id="playa" controls />
+            <audio id="playa" controls></audio>
           </div>
+          <hr />
+
+          ${!IS_PROD &&
+          html`
+            <div>
+              ${row.entityType == 'track' &&
+              html` <a href="${API_HOST}/v1/full/tracks/${row.entityId}">
+                Track: ${row.entityId}
+              </a>`}
+              ${row.entityType == 'album' &&
+              html` <a href="${API_HOST}/v1/full/playlists/${row.entityId}">
+                Album: ${row.entityId}
+              </a>`}
+
+              <hr />
+              <details>
+                <summary>Test Publish</summary>
+                <form action="/publish/${releaseId}">
+                  <select name="userId" required>
+                    <option value="">Select User</option>
+                    ${allUsers.map(
+                      (u) => html`<option value="${u.id}">${u.name}</option>`
+                    )}
+                  </select>
+                  <button>publish</button>
+                </form>
+              </details>
+            </div>
+          `}
         </div>
         <script>
           function play(url) {
@@ -537,7 +573,6 @@ app.get('/users', (c) => {
               <th>name</th>
               <th>api key</th>
               <th>created</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -553,34 +588,6 @@ app.get('/users', (c) => {
                     >
                   </td>
                   <td>${user.createdAt}</td>
-                  <td>
-                    ${!IS_PROD &&
-                    html`
-                      <form action="/users/simulate/${user.apiKey}/${user.id}">
-                        <select
-                          name="exampleFileName"
-                          required
-                          onchange="this.form.submit()"
-                        >
-                          <option selected disabled value="">
-                            Simulate Delivery
-                          </option>
-                          <optgroup label="Track">
-                            <option value="track_basic.xml">Basic</option>
-                            <option value="track_follow_gated.xml">
-                              Follow Gated Stream / Tip Gated Download
-                            </option>
-                            <option value="track_pay_gated.xml">
-                              Pay Gated
-                            </option>
-                          </optgroup>
-                          <optgroup label="Album">
-                            <option value="album_basic.xml">Basic</option>
-                          </optgroup>
-                        </select>
-                      </form>
-                    `}
-                  </td>
                 </tr>`
             )}
           </tbody>
@@ -591,27 +598,22 @@ app.get('/users', (c) => {
 
 app.route('/cool', cool)
 
-app.get('/users/simulate/:apiKey/:id', async (c) => {
+app.get('/publish/:releaseId', async (c) => {
   if (IS_PROD) {
-    return c.text(`simulate delivery is disabled in prod`, 400)
+    return c.text(`publish release is disabled in prod`, 400)
   }
 
-  // find source
-  const source = sources.all().find((s) => s.ddexKey == c.req.param('apiKey'))
-  const user = userRepo.findOne({
-    id: c.req.param('id'),
-    apiKey: c.req.param('apiKey'),
-  })
-  const exampleFileName = c.req.query('exampleFileName')
-
-  if (!source || !user || !exampleFileName) {
-    return c.text(`invalid simulate request`, 400)
+  const releaseId = c.req.param('releaseId')
+  const releaseRow = releaseRepo.get(releaseId)
+  const release = releaseRow?._parsed
+  const user = userRepo.findOne({ id: c.req.query('userId') })
+  const source = sources.findByName(releaseRow?.source || '')
+  if (!releaseRow || !user || !source || !release) {
+    return c.text('not found', 404)
   }
-
-  // simulate delivery
-  await simulateDeliveryForUserName(source, exampleFileName, user.name)
-
-  return c.redirect('/releases')
+  release.audiusUser = user.id
+  await publishRelease(source, releaseRow, release)
+  return c.redirect(`/releases/${releaseId}`)
 })
 
 export type JwtUser = {

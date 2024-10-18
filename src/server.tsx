@@ -12,6 +12,7 @@ import { HtmlEscapedString } from 'hono/utils/html'
 import { cool } from './_cool'
 import {
   ReleaseProcessingStatus,
+  assetRepo,
   kvRepo,
   releaseRepo,
   userRepo,
@@ -483,13 +484,11 @@ app.get('/release/:key/:type/:ref/:size?', async (c) => {
   const row = releaseRepo.get(key)
   if (!row) return c.json({ error: 'not found' }, 404)
 
-  const collection =
-    type == 'images' ? row._parsed?.images : row._parsed?.soundRecordings
-  const asset = collection!.find((i) => i.ref == ref)
+  const asset = assetRepo.get(key, ref)
   if (!asset) return c.json({ error: 'not found' }, 404)
 
   const ok = await readAssetWithCaching(
-    row.xmlUrl,
+    asset.xmlUrl,
     asset.filePath,
     asset.fileName,
     size

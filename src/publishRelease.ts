@@ -1,5 +1,10 @@
 import { Genre, UploadAlbumRequest, UploadTrackRequest } from '@audius/sdk'
-import { ReleaseProcessingStatus, ReleaseRow, releaseRepo } from './db'
+import {
+  ReleaseProcessingStatus,
+  ReleaseRow,
+  assetRepo,
+  releaseRepo,
+} from './db'
 import { DDEXContributor, DDEXRelease, DDEXResource } from './parseDelivery'
 import { readAssetWithCaching } from './s3poller'
 import { getSdk } from './sdk'
@@ -62,8 +67,12 @@ export async function publishRelease(
   const sdk = getSdk(source)
 
   // read asset file
-  async function resolveFile({ filePath, fileName }: DDEXResource) {
-    return readAssetWithCaching(releaseRow.xmlUrl, filePath, fileName)
+  async function resolveFile({ ref }: DDEXResource) {
+    const asset = assetRepo.get(releaseRow.key, ref)
+    if (!asset) {
+      throw new Error(`failed to resolve asset ${releaseRow.key} ${ref}`)
+    }
+    return readAssetWithCaching(asset.xmlUrl, asset.filePath, asset.fileName)
   }
 
   const imageFile = await resolveFile(release.images[0])

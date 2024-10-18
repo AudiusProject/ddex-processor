@@ -215,13 +215,12 @@ export function parseDdexXml(source: string, xmlUrl: string, xmlText: string) {
     const { releaseIds } = parsePurgeXml($)
     releaseRepo.markForDelete(source, xmlUrl, messageTimestamp, releaseIds)
   } else if (tagName == 'NewReleaseMessage') {
-    if (isUpdate) {
-      console.log('TODO: handle updates.  Skipping update', xmlUrl)
-      return
-    }
     // create or replace this release in db
     const releases = parseReleaseXml(source, $)
     for (const release of releases) {
+      if (isUpdate) {
+        console.log(`update`, xmlUrl)
+      }
       releaseRepo.upsert(source, xmlUrl, messageTimestamp, release)
     }
     return releases
@@ -474,9 +473,7 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
       'FilePath',
       'FileName',
     ].map((k) => $(el).find(k).text())
-    if (fileName) {
-      acc[ref] = { ref, filePath, fileName }
-    }
+    acc[ref] = { ref, filePath, fileName }
     return acc
   }
 

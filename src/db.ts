@@ -65,7 +65,18 @@ create table if not exists s3markers (
   );
   `,
   sql`alter table releases add column releaseType text;`,
-  sql`alter table releases add column releaseDate text;`
+  sql`alter table releases add column releaseDate text;`,
+  sql`
+    create table if not exists assets (
+      source text not null,
+      releaseId text not null,
+      ref text not null,
+      xmlUrl text not null,
+      filePath text not null,
+      fileName text not null,
+      PRIMARY KEY (source, releaseId, ref)
+    );
+  `
 )
 
 export type XmlRow = {
@@ -208,6 +219,26 @@ export const xmlRepo = {
 }
 
 //
+// Resource repo
+//
+
+export type AssetRow = {
+  releaseId: string
+  ref: string
+  xmlUrl: string
+  filePath: string
+  fileName: string
+}
+
+export const assetRepo = {
+  get(releaseId: string, ref: string) {
+    return db.get<AssetRow>(
+      sql`select * from assets where releaseId = ${releaseId} and ref = ${ref}`
+    )
+  },
+}
+
+//
 // release repo
 //
 
@@ -289,12 +320,8 @@ export const releaseRepo = {
 
       // if prior exists and is newer, skip
       if (prior && prior.messageTimestamp > messageTimestamp) {
-        // For now we let older submissions update...
-        // When UpdateMessage is properly supported,
-        // we'll want to exit here.
-        //
-        // console.log(`skipping ${xmlUrl} because ${key} is newer`)
-        // return
+        console.log(`skipping ${xmlUrl} because ${key} is newer`)
+        return
       }
 
       // if same xmlUrl + json, skip
@@ -312,6 +339,21 @@ export const releaseRepo = {
       // treat as takedown
       if (prior?.entityId && release.deals.length == 0) {
         status = ReleaseProcessingStatus.DeletePending
+      }
+
+      // pull out original resource URLs
+      // so if an update comes in we can still resolve the original file
+      for (const r of [...release.soundRecordings, ...release.images]) {
+        if (r.ref && r.filePath && r.fileName) {
+          dbUpsert('assets', {
+            source: source,
+            releaseId: key,
+            ref: r.ref,
+            xmlUrl: xmlUrl,
+            filePath: r.filePath,
+            fileName: r.fileName,
+          })
+        }
       }
 
       dbUpsert('releases', {

@@ -66,6 +66,14 @@ app.use(async (c, next) => {
 
 app.get('/', async (c) => {
   const me = c.get('me')
+  const authSources = sources.all().filter((s) => s.ddexKey && s.ddexSecret)
+  const firstSource = authSources[0]
+  if (!firstSource) {
+    return c.text(
+      'No valid sources found.  Check data/sources.json is configured correctly',
+      500
+    )
+  }
 
   return c.html(
     Layout(html`
@@ -82,15 +90,24 @@ app.get('/', async (c) => {
             `
           : html`
               <div>
-                ${sources
-                  .all()
-                  .map(
-                    (s) => html`
-                      <a role="button" href="/auth/source/${s.name}"
-                        >${s.name}</a
-                      >
-                    `
-                  )}
+                <div>
+                  <a role="button" href="/auth/source/${firstSource.name}">
+                    Login
+                  </a>
+                </div>
+
+                <div style="margin-top: 50px">
+                  <div>Or Choose Auth Provider (Advanced)</div>
+                  <div>
+                    ${authSources.map(
+                      (s) => html`
+                        <a style="padding: 4px" href="/auth/source/${s.name}">
+                          ${s.name}
+                        </a>
+                      `
+                    )}
+                  </div>
+                </div>
               </div>
             `}
       </div>
@@ -141,7 +158,10 @@ app.get('/auth/redirect', async (c) => {
     })
 
     // after user upsert, rescan for matches
-    setTimeout(() => reParsePastXml(), 10)
+    // todo: reparsing all actually takes a while now
+    // and blocks up the webserver for multiple seconds
+    // so probably need to move worker to a separate process...
+    // setTimeout(() => reParsePastXml(), 10)
 
     // set cookie
     const j = JSON.stringify(payload)

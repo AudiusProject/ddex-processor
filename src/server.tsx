@@ -503,6 +503,7 @@ app.get('/release/:key/:type/:ref/:size?', async (c) => {
       c.header('Content-Type', ft.mime)
     }
   }
+  c.header('Cache-Control', 'max-age=7200')
   return c.body(ok.buffer)
 })
 

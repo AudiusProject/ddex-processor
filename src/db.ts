@@ -8,6 +8,13 @@ const dbLocation = process.env.SQLITE_URL || `data/ddex.db`
 const db = new Database(dbLocation)
 
 db.pragma('journal_mode = WAL')
+db.pragma('synchronous = NORMAL')
+db.pragma('busy_timeout = 5000')
+db.pragma('cache_size = -20000')
+db.pragma('auto_vacuum = INCREMENTAL')
+db.pragma('temp_store = MEMORY')
+db.pragma('mmap_size = 2147483648')
+db.pragma('page_size = 8192')
 
 db.migrate(
   sql`

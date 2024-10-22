@@ -24,6 +24,7 @@
     "better-sqlite3": "^11.3.0",
     "cheerio": "^1.0.0",
     "commander": "^12.1.0",
+    "csv": "^6.3.10",
     "decompress": "^4.2.1",
     "domhandler": "^5.0.3",
     "dotenv": "^16.4.5",

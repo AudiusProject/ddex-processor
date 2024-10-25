@@ -9,13 +9,13 @@ import { basename, dirname, join, resolve } from 'path'
 import sharp from 'sharp'
 import { s3markerRepo } from './db'
 import { parseDdexXml } from './parseDelivery'
-import { SourceConfig, sources } from './sources'
+import { BucketConfig, sources } from './sources'
 
 type AccessKey = string
 
 const s3clients: Record<AccessKey, S3Client> = {}
 
-export function dialS3(sourceConfig: SourceConfig) {
+export function dialS3(sourceConfig: BucketConfig) {
   const { awsKey, awsSecret, awsRegion } = sourceConfig
   if (!s3clients[awsKey]) {
     const config: S3ClientConfig = {

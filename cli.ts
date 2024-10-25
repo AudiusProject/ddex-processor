@@ -4,6 +4,7 @@ import { program } from 'commander'
 import { cleanupFiles } from './src/cleanupFiles'
 import { parseDelivery, reParsePastXml } from './src/parseDelivery'
 import { publishValidPendingReleases } from './src/publishRelease'
+import { clmReport } from './src/reporting'
 import { pollS3 } from './src/s3poller'
 import { sync } from './src/s3sync'
 import { startServer } from './src/server'
@@ -74,6 +75,15 @@ program
   .action(async () => {
     startServer()
     startWorker()
+  })
+
+program
+  .command('report-clm')
+  .description(
+    'Generate CLM report and push to reporting.clm bucket defined in data/sources.json'
+  )
+  .action(async () => {
+    clmReport()
   })
 
 program.command('cleanup').description('remove temp files').action(cleanupFiles)

@@ -1,9 +1,12 @@
+import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { stringify } from 'csv-stringify/sync'
 import { mkdir, writeFile } from 'fs/promises'
 import path from 'path'
 import { releaseRepo } from './db'
+import { dialS3 } from './s3poller'
+import { sources } from './sources'
 
-async function clmReport() {
+export async function clmReport() {
   // todo: load cursors to only do new / updated releases for each source
 
   const releases = releaseRepo.all()
@@ -49,8 +52,21 @@ async function clmReport() {
   await mkdir('reports', { recursive: true })
   await writeFile(path.join('reports', fileName), result)
 
-  // todo: add ability to specify a clm report destination in sources.json
-  //       this should put the CSV into that bucket
+  // push to S3
+  {
+    const { clm } = sources.reporting()
+    const s3Client = dialS3(clm)
+    const key = `inputs/clm/${fileName}`
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: clm.awsBucket,
+        Key: key,
+        Body: result,
+        ContentType: 'text/csv',
+      })
+    )
+    console.log(`wrote to s3. bucket=${clm.awsBucket} key=${key}`)
+  }
 }
 
 function padToTwoDigits(num: number) {
@@ -66,7 +82,3 @@ function formatDate(date: Date): string {
   const seconds = padToTwoDigits(date.getSeconds())
   return `${year}${month}${day}${hours}${minutes}${seconds}`
 }
-
-// run manually:
-// tsx src/reporting.ts
-clmReport()

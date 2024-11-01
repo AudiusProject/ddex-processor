@@ -81,7 +81,7 @@ export async function publishRelease(
     release.soundRecordings.map((track) => resolveFile(track))
   )
 
-  const trackMetadatas = prepareTrackMetadatas(release)
+  const trackMetadatas = prepareTrackMetadatas(source, release)
 
   if (source.placementHosts) {
     for (const t of trackMetadatas) {
@@ -93,7 +93,7 @@ export async function publishRelease(
   if (release.soundRecordings.length > 1) {
     const uploadAlbumRequest: UploadAlbumRequest = {
       coverArtFile: imageFile,
-      metadata: prepareAlbumMetadata(release),
+      metadata: prepareAlbumMetadata(source, release),
       trackFiles,
       trackMetadatas,
       userId: release.audiusUser!,
@@ -161,7 +161,7 @@ async function updateTrack(
   release: DDEXRelease
 ) {
   const sdk = getSdk(source)
-  const metas = prepareTrackMetadatas(release)
+  const metas = prepareTrackMetadatas(source, release)
 
   const result = await sdk.tracks.updateTrack({
     userId: release.audiusUser!,
@@ -179,7 +179,10 @@ async function updateTrack(
   return result
 }
 
-export function prepareTrackMetadatas(release: DDEXRelease) {
+export function prepareTrackMetadatas(
+  source: SourceConfig,
+  release: DDEXRelease
+) {
   const trackMetas: UploadTrackRequest['metadata'][] =
     release.soundRecordings.map((sound) => {
       const audiusGenre = sound.audiusGenre || release.audiusGenre || Genre.ALL
@@ -239,9 +242,8 @@ export function prepareTrackMetadatas(release: DDEXRelease) {
         }
 
         if (deal.audiusDealType == 'PayGated') {
-          // todo: if source has a payout wallet...
-          // use that instead of individual artist user ID.
-          const payTo = decodeId(release.audiusUser!)
+          const payTo = source.payoutWallet || decodeId(release.audiusUser!)
+          console.log({ payTo })
 
           const cond = {
             usdcPurchase: {
@@ -258,7 +260,7 @@ export function prepareTrackMetadatas(release: DDEXRelease) {
             meta.downloadConditions = cond
           }
 
-          if (sound.previewStartSeconds) {
+          if (sound.previewStartSeconds != undefined) {
             meta.previewStartSeconds = sound.previewStartSeconds
           }
         }
@@ -281,7 +283,7 @@ async function updateAlbum(
   row: ReleaseRow,
   release: DDEXRelease
 ) {
-  const meta = prepareAlbumMetadata(release)
+  const meta = prepareAlbumMetadata(source, release)
   const sdk = getSdk(source)
 
   const result = await sdk.albums.updateAlbum({
@@ -339,7 +341,10 @@ export async function deleteRelease(source: SourceConfig, r: ReleaseRow) {
   }
 }
 
-export function prepareAlbumMetadata(release: DDEXRelease) {
+export function prepareAlbumMetadata(
+  source: SourceConfig,
+  release: DDEXRelease
+) {
   let releaseDate: Date | undefined
   if (release.releaseDate) {
     releaseDate = new Date(release.releaseDate)
@@ -356,7 +361,26 @@ export function prepareAlbumMetadata(release: DDEXRelease) {
     producerCopyrightLine: release.producerCopyrightLine,
   }
 
-  // todo: album stream + download conditions
+  for (const deal of release.deals) {
+    if (deal.audiusDealType == 'PayGated') {
+      const payTo = source.payoutWallet || decodeId(release.audiusUser!)
+
+      const cond = {
+        usdcPurchase: {
+          price: 5.0 * 100,
+          splits: [{ user_id: payTo, percentage: 100 }],
+        },
+      }
+      if (deal.forStream) {
+        meta.isStreamGated = true
+        meta.streamConditions = cond
+      }
+      if (deal.forDownload) {
+        meta.isDownloadGated = true
+        meta.downloadConditions = cond
+      }
+    }
+  }
 
   return meta
 }

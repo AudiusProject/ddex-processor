@@ -532,6 +532,8 @@ app.get('/xmls/:xmlUrl', (c) => {
   const row = xmlRepo.get(xmlUrl)
   if (!row) return c.json({ error: 'not found' }, 404)
 
+  const source = sources.findByXmlUrl(xmlUrl)
+
   // parse=true will parse the xml to internal representation
   if (parseBool(c.req.query('parse'))) {
     const parsed = parseDdexXml(
@@ -543,9 +545,9 @@ app.get('/xmls/:xmlUrl', (c) => {
     // parse=sdk will convert internal representation to SDK friendly format
     if (c.req.query('parse') == 'sdk') {
       const sdkReleases = parsed.map((release) => {
-        const tracks = prepareTrackMetadatas(release)
+        const tracks = prepareTrackMetadatas(source, release)
         if (tracks.length > 1) {
-          const album = prepareAlbumMetadata(release)
+          const album = prepareAlbumMetadata(source, release)
           return {
             ref: release.ref,
             album,

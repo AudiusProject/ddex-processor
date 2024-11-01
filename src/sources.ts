@@ -23,6 +23,7 @@ export type SourceConfig = BucketConfig & {
   ddexKey: string
   ddexSecret: string
   placementHosts?: string
+  payoutWallet?: string
 }
 
 let sourcesFile: SourcesFile

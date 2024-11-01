@@ -46,7 +46,7 @@ export async function clmReport() {
   })
 
   const result = stringify(rows, { header: true })
-  const fileName = `Audius_DDEX_CLM_${formatDate(new Date())}.csv`
+  const fileName = `Audius_CLM_${formatDate(new Date())}.csv`
 
   // console.log(result)
   await mkdir('reports', { recursive: true })

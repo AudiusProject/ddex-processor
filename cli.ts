@@ -70,6 +70,13 @@ program
   })
 
 program
+  .command('reparse')
+  .description('reparse all stored xml')
+  .action(async () => {
+    reParsePastXml()
+  })
+
+program
   .command('start')
   .description('Start both server + background processes')
   .action(async () => {

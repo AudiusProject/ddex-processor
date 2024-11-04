@@ -11,6 +11,9 @@ import { getSdk } from './sdk'
 import { SourceConfig, sources } from './sources'
 import { decodeId } from './util'
 
+const DEFAULT_TRACK_PRICE = 1.0
+const DEFAULT_ALBUM_PRICE = 5.0
+
 export async function publishValidPendingReleases() {
   const rows = releaseRepo.all({ pendingPublish: true })
   if (!rows.length) return
@@ -205,6 +208,7 @@ export function prepareTrackMetadatas(
         isrc: release.releaseIds.isrc,
         iswc: release.releaseIds.iswc,
         ddexReleaseIds: release.releaseIds,
+        ddexApp: source.name,
         releaseDate,
         copyrightLine,
         producerCopyrightLine,
@@ -243,25 +247,30 @@ export function prepareTrackMetadatas(
 
         if (deal.audiusDealType == 'PayGated') {
           const payTo = source.payoutWallet || decodeId(release.audiusUser!)
-          console.log({ payTo })
+          const priceUsd = deal.priceUsd || DEFAULT_TRACK_PRICE
+          console.log({ payTo, priceUsd })
 
           const cond = {
             usdcPurchase: {
-              price: deal.priceUsd * 100,
+              price: priceUsd * 100,
               splits: [{ user_id: payTo, percentage: 100 }],
             },
-          }
-          if (deal.forStream) {
-            meta.isStreamGated = true
-            meta.streamConditions = cond
-          }
-          if (deal.forDownload) {
-            meta.isDownloadGated = true
-            meta.downloadConditions = cond
           }
 
           if (sound.previewStartSeconds != undefined) {
             meta.previewStartSeconds = sound.previewStartSeconds
+          }
+
+          if (deal.forStream) {
+            meta.isStreamGated = true
+            meta.streamConditions = cond
+            if (!meta.previewStartSeconds) {
+              meta.previewStartSeconds = 0
+            }
+          }
+          if (deal.forDownload) {
+            meta.isDownloadGated = true
+            meta.downloadConditions = cond
           }
         }
       }
@@ -354,6 +363,7 @@ export function prepareAlbumMetadata(
     albumName: release.title,
     releaseDate,
     ddexReleaseIds: release.releaseIds,
+    ddexApp: source.name,
     artists: release.artists.map(mapContributor),
     upc: release.releaseIds.icpn, // ICPN is either UPC (USA/Canada) or EAN (rest of world), but we call them both UPC
     parentalWarningType: release.parentalWarningType,
@@ -364,10 +374,11 @@ export function prepareAlbumMetadata(
   for (const deal of release.deals) {
     if (deal.audiusDealType == 'PayGated') {
       const payTo = source.payoutWallet || decodeId(release.audiusUser!)
+      const priceUsd = deal.priceUsd || DEFAULT_ALBUM_PRICE
 
       const cond = {
         usdcPurchase: {
-          price: 5.0 * 100,
+          price: priceUsd * 100,
           splits: [{ user_id: payTo, percentage: 100 }],
         },
       }

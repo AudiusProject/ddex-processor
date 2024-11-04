@@ -109,7 +109,7 @@ export type DealFree = DealFields & {
 
 export type DealPayGated = DealFields & {
   audiusDealType: 'PayGated'
-  priceUsd: number
+  priceUsd?: number
 }
 
 export type DealFollowGated = DealFields & {
@@ -337,16 +337,17 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
           audiusDealType: 'Free',
         })
       } else if (commercialModelType == 'PayAsYouGoModel') {
-        const defaultPrice = 1.0
-        const priceUsd =
-          parseFloat(
-            $el.find('WholesalePricePerUnit[CurrencyCode="USD"]').text()
-          ) || defaultPrice
-        addDeal({
+        const deal: DealPayGated = {
           ...common,
           audiusDealType: 'PayGated',
-          priceUsd,
-        })
+        }
+        const priceUsd = parseFloat(
+          $el.find('WholesalePricePerUnit[CurrencyCode="USD"]').text()
+        )
+        if (priceUsd) {
+          deal.priceUsd = priceUsd
+        }
+        addDeal(deal)
       } else if (
         commercialModelType == 'FollowGated' ||
         commercialModelType == 'TipGated'
@@ -573,7 +574,9 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
         })
 
       // deal or no deal?
-      if (!release.deals.length) {
+      if (new Date(release.releaseDate) > new Date()) {
+        release.problems.push('FutureRelease')
+      } else if (!release.deals.length) {
         release.problems.push('NoDeal')
       }
 

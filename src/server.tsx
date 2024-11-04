@@ -12,6 +12,7 @@ import { HtmlEscapedString } from 'hono/utils/html'
 import { cool } from './_cool'
 import {
   ReleaseProcessingStatus,
+  ReleaseRow,
   assetRepo,
   kvRepo,
   releaseRepo,
@@ -246,7 +247,7 @@ app.get('/releases', (c) => {
 
           <!-- actions -->
           <form method="POST" action="/releases/reparse">
-            <button class="outline">re-parse</button>
+            <button class="outline hidden">re-parse</button>
           </form>
         </div>
 
@@ -332,25 +333,7 @@ app.get('/releases', (c) => {
                       ${row.entityId}
                     </a>`}
                   </td>
-                  <td>
-                    <a
-                      href="/xmls/${encodeURIComponent(row.xmlUrl)}"
-                      target="_blank"
-                      >xml</a
-                    >
-
-                    <a
-                      href="/releases/${encodeURIComponent(
-                        row.key
-                      )}/json?pretty"
-                      target="_blank"
-                      >parsed</a
-                    >
-
-                    <a href="/xmls/${encodeURIComponent(row.xmlUrl)}?parse=sdk"
-                      >sdk</a
-                    >
-                  </td>
+                  <td>${debugLinks(row)}</td>
                 </tr>`
             )}
           </tbody>
@@ -449,6 +432,10 @@ app.get('/releases/:key', (c) => {
           ${!IS_PROD &&
           html`
             <div>
+              ${debugLinks(row)}
+
+              <hr />
+
               ${row.entityType == 'track' &&
               html` <a href="${API_HOST}/v1/full/tracks/${row.entityId}">
                 Track: ${row.entityId}
@@ -459,6 +446,7 @@ app.get('/releases/:key', (c) => {
               </a>`}
 
               <hr />
+
               <details>
                 <summary>Test Publish</summary>
                 <form action="/publish/${releaseId}">
@@ -676,6 +664,20 @@ function audiusUserLink(id: string) {
   >`
 }
 
+function debugLinks(row: ReleaseRow) {
+  return html`
+    <a href="/xmls/${encodeURIComponent(row.xmlUrl)}" target="_blank">xml</a>
+
+    <a
+      href="/releases/${encodeURIComponent(row.key)}/json?pretty"
+      target="_blank"
+      >parsed</a
+    >
+
+    <a href="/xmls/${encodeURIComponent(row.xmlUrl)}?parse=sdk">sdk</a>
+  `
+}
+
 function Layout(
   inner: HtmlEscapedString | Promise<HtmlEscapedString>,
   title?: string
@@ -722,6 +724,9 @@ function Layout(
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+          }
+          .hidden {
+            display: none;
           }
         </style>
       </head>

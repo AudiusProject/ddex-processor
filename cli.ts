@@ -2,11 +2,13 @@ import 'dotenv/config'
 
 import { program } from 'commander'
 import { cleanupFiles } from './src/cleanupFiles'
+import { releaseRepo } from './src/db'
 import { parseDelivery, reParsePastXml } from './src/parseDelivery'
 import { publishValidPendingReleases } from './src/publishRelease'
 import { clmReport } from './src/reporting'
 import { pollS3 } from './src/s3poller'
 import { sync } from './src/s3sync'
+import { getSdk } from './src/sdk'
 import { startServer } from './src/server'
 import { sources } from './src/sources'
 import { startUsersPoller } from './src/usersPoller'
@@ -85,6 +87,50 @@ program
   })
 
 program
+  .command('delete')
+  .description('Delete a release... USE CAUTION')
+  .argument('<release_id>', 'release ID to delete')
+  .action(async (releaseId) => {
+    const releaseRow = releaseRepo.get(releaseId)
+    if (!releaseRow) {
+      console.warn(`no release for id: ${releaseId}`)
+      process.exit(1)
+    }
+
+    const release = releaseRow._parsed!
+    const userId = release.audiusUser
+    if (!releaseRow.entityId) {
+      console.warn(`release id ${releaseId} has no entityId`)
+      process.exit(1)
+    }
+    if (!userId) {
+      console.warn(`release id ${releaseId} has no audiusUser`)
+      process.exit(1)
+    }
+
+    const sourceConfig = sources.findByName(releaseRow.source)!
+    const sdk = getSdk(sourceConfig)
+
+    console.warn(
+      `deleting ${releaseRow.entityType} ${releaseId}: ${release.title}`
+    )
+    let result: any
+    if (releaseRow.entityType == 'album') {
+      result = await sdk.albums.deleteAlbum({
+        albumId: releaseRow.entityId,
+        userId,
+      })
+    } else {
+      result = await sdk.tracks.deleteTrack({
+        trackId: releaseRow.entityId,
+        userId,
+      })
+    }
+    console.warn(`deleted ${releaseId}`, result)
+    process.exit(0)
+  })
+
+program
   .command('report-clm')
   .description(
     'Generate CLM report and push to reporting.clm bucket defined in data/sources.json'
@@ -106,6 +152,6 @@ async function startWorker() {
     console.log('polling...')
     await pollS3()
     await publishValidPendingReleases()
-    await sleep(60_000)
+    await sleep(3 * 60_000)
   }
 }

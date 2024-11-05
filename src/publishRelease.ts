@@ -1,4 +1,5 @@
 import { Genre, UploadAlbumRequest, UploadTrackRequest } from '@audius/sdk'
+import Web3 from 'web3'
 import {
   ReleaseProcessingStatus,
   ReleaseRow,
@@ -208,7 +209,7 @@ export function prepareTrackMetadatas(
         isrc: release.releaseIds.isrc,
         iswc: release.releaseIds.iswc,
         ddexReleaseIds: release.releaseIds,
-        ddexApp: source.name,
+        ddexApp: Web3.utils.toChecksumAddress(source.ddexKey),
         releaseDate,
         copyrightLine,
         producerCopyrightLine,
@@ -363,7 +364,7 @@ export function prepareAlbumMetadata(
     albumName: release.title,
     releaseDate,
     ddexReleaseIds: release.releaseIds,
-    ddexApp: source.name,
+    ddexApp: Web3.utils.toChecksumAddress(source.ddexKey),
     artists: release.artists.map(mapContributor),
     upc: release.releaseIds.icpn, // ICPN is either UPC (USA/Canada) or EAN (rest of world), but we call them both UPC
     parentalWarningType: release.parentalWarningType,

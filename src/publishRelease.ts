@@ -246,14 +246,14 @@ export function prepareTrackMetadatas(
         }
 
         if (deal.audiusDealType == 'PayGated') {
-          const payTo = source.payoutWallet || decodeId(release.audiusUser!)
+          const payTo = source.payoutUserId || release.audiusUser!
           const priceUsd = deal.priceUsd || DEFAULT_TRACK_PRICE
           console.log({ payTo, priceUsd })
 
           const cond = {
             usdcPurchase: {
               price: priceUsd * 100,
-              splits: [{ user_id: payTo, percentage: 100 }],
+              splits: [{ user_id: decodeId(payTo), percentage: 100 }],
             },
           }
 
@@ -373,13 +373,13 @@ export function prepareAlbumMetadata(
 
   for (const deal of release.deals) {
     if (deal.audiusDealType == 'PayGated') {
-      const payTo = source.payoutWallet || decodeId(release.audiusUser!)
+      const payTo = source.payoutUserId || release.audiusUser!
       const priceUsd = deal.priceUsd || DEFAULT_ALBUM_PRICE
 
       const cond = {
         usdcPurchase: {
           price: priceUsd * 100,
-          splits: [{ user_id: payTo, percentage: 100 }],
+          splits: [{ user_id: decodeId(payTo), percentage: 100 }],
         },
       }
       if (deal.forStream) {

@@ -2,9 +2,10 @@ import sql, { Database } from '@radically-straightforward/sqlite'
 import { Statement } from 'better-sqlite3'
 import { randomBytes } from 'node:crypto'
 import { DDEXRelease, DDEXReleaseIds } from './parseDelivery'
+import { dataDir } from './sources'
 import { lowerAscii } from './util'
 
-const dbLocation = process.env.SQLITE_URL || `data/ddex.db`
+const dbLocation = process.env.SQLITE_URL || `${dataDir}/ddex.db`
 const db = new Database(dbLocation)
 
 db.pragma('journal_mode = WAL')

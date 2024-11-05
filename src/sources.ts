@@ -1,6 +1,11 @@
-import { readFileSync } from 'fs'
+import { mkdirSync, readFileSync } from 'fs'
+import { decodeId } from './util'
 
-const sourcesLocation = process.env.SOURCES_LOCATION || './data/sources.json'
+export const dataDir = process.env.DATA_DIR || 'data'
+mkdirSync(dataDir, { recursive: true })
+console.log({ dataDir })
+const sourcesLocation =
+  process.env.SOURCES_LOCATION || `${dataDir}/sources.json`
 
 type SourcesFile = {
   sources: SourceConfig[]
@@ -23,7 +28,7 @@ export type SourceConfig = BucketConfig & {
   ddexKey: string
   ddexSecret: string
   placementHosts?: string
-  payoutWallet?: string
+  payoutUserId?: string
 }
 
 let sourcesFile: SourcesFile
@@ -35,6 +40,15 @@ export const sources = {
       sourcesFile = JSON.parse(j) as SourcesFile
     } catch (e) {
       console.log('failed to load sources', e)
+    }
+
+    // validate
+    for (const source of sourcesFile.sources) {
+      if (source.payoutUserId && !decodeId(source.payoutUserId)) {
+        throw new Error(
+          `Invalid payoutUserId for ${source.name}.  Must be encoded int id.`
+        )
+      }
     }
   },
 

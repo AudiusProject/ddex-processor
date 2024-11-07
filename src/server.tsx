@@ -29,6 +29,8 @@ import {
   prepareAlbumMetadata,
   prepareTrackMetadatas,
   publishRelease,
+  updateAlbum,
+  updateTrack,
 } from './publishRelease'
 import { readAssetWithCaching } from './s3poller'
 import { sources } from './sources'
@@ -622,7 +624,16 @@ app.get('/publish/:releaseId', async (c) => {
     return c.text('not found', 404)
   }
   release.audiusUser = user.id
-  await publishRelease(source, releaseRow, release)
+  if (releaseRow.entityId) {
+    // update
+    if (releaseRow.entityType == 'track') {
+      await updateTrack(source, releaseRow, release)
+    } else if (releaseRow.entityType == 'album') {
+      await updateAlbum(source, releaseRow, release)
+    }
+  } else {
+    await publishRelease(source, releaseRow, release)
+  }
   return c.redirect(`/releases/${releaseId}`)
 })
 

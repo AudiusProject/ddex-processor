@@ -437,7 +437,7 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
       labelName: $el.find('LabelName').text(),
       duration: parseDuration($el.find('Duration').text()),
       previewStartSeconds: parseInt(
-        $el.find('PreviewDetails > StartPoint').text()
+        $el.find('PreviewDetails > StartPoint:first').text()
       ),
       genre: genre,
       subGenre: subGenre,

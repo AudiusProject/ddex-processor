@@ -159,7 +159,7 @@ export async function publishRelease(
   }
 }
 
-async function updateTrack(
+export async function updateTrack(
   source: SourceConfig,
   row: ReleaseRow,
   release: DDEXRelease
@@ -288,7 +288,7 @@ export function prepareTrackMetadatas(
 // Album
 //
 
-async function updateAlbum(
+export async function updateAlbum(
   source: SourceConfig,
   row: ReleaseRow,
   release: DDEXRelease

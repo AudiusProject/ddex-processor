@@ -229,6 +229,7 @@ export function prepareTrackMetadatas(
             meta.streamConditions = cond
           }
           if (deal.forDownload) {
+            meta.isDownloadable = true
             meta.isDownloadGated = true
             meta.downloadConditions = cond
           }
@@ -241,6 +242,7 @@ export function prepareTrackMetadatas(
             meta.streamConditions = cond
           }
           if (deal.forDownload) {
+            meta.isDownloadable = true
             meta.isDownloadGated = true
             meta.downloadConditions = cond
           }
@@ -270,6 +272,7 @@ export function prepareTrackMetadatas(
             }
           }
           if (deal.forDownload) {
+            meta.isDownloadable = true
             meta.isDownloadGated = true
             meta.downloadConditions = cond
           }

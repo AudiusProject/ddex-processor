@@ -93,7 +93,9 @@ create table if not exists s3markers (
       isCleared boolean,
       PRIMARY KEY (releaseId, trackId)
     );
-  `
+  `,
+  sql`alter table releases add column numCleared int`,
+  sql`alter table releases add column numNotCleared int`
 )
 
 export type XmlRow = {
@@ -131,6 +133,8 @@ export type ReleaseRow = {
   json: string
   status: ReleaseProcessingStatus
   createdAt: string
+  numCleared: number
+  numNotCleared: number
 
   entityType?: 'track' | 'album'
   entityId?: string
@@ -467,6 +471,7 @@ export const isClearedRepo = {
   upsert(c: IsClearedRow) {
     dbUpsert('isCleared', c)
   },
+
   listForRelease(releaseId: string) {
     const rows = dbSelect<IsClearedRow>('isCleared', { releaseId })
     const t: Record<string, boolean> = {}
@@ -474,6 +479,24 @@ export const isClearedRepo = {
       t[row.trackId] = row.isCleared == 't'
     }
     return t
+  },
+
+  updateCounts() {
+    db.exec(`
+      with clearCount as (
+        select
+          releaseId,
+          SUM(CASE WHEN isCleared = 't' THEN 1 ELSE 0 END) as cleared,
+          SUM(CASE WHEN isCleared = 'f' THEN 1 ELSE 0 END) as notCleared
+        from isCleared
+        group by 1
+      )
+      update releases
+      set numCleared = cleared,
+          numNotCleared = notCleared
+      from clearCount
+      where releases.key = clearCount.releaseId
+    `)
   },
 }
 

@@ -262,6 +262,7 @@ app.get('/releases', (c) => {
               <th>Genre</th>
               <th>Release</th>
               <th>Status</th>
+              <th>Clear</th>
               <th></th>
               <th></th>
               <th>debug</th>
@@ -316,6 +317,22 @@ app.get('/releases', (c) => {
                     ${row._parsed?.problems?.map(
                       (p) => html`<small>${p} </small>`
                     )}
+                  </td>
+                  <td>
+                    ${row.numCleared != undefined &&
+                    html`<div>
+                      <b
+                        title="${row.numCleared} cleared
+${row.numNotCleared} not cleared
+${row._parsed?.soundRecordings.length} tracks"
+                      >
+                        ${(
+                          (row.numCleared /
+                            (row._parsed?.soundRecordings.length || 1)) *
+                          100
+                        ).toFixed() + '%'}
+                      </b>
+                    </div>`}
                   </td>
                   <td>
                     ${row.publishErrorCount > 0 &&

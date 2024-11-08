@@ -59,6 +59,8 @@ async function fromS3() {
       // todo: mark key as done... skip next time
     }
   }
+
+  isClearedRepo.updateCounts()
 }
 
 async function fromDisk() {

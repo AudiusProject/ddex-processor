@@ -14,6 +14,7 @@ import {
   ReleaseProcessingStatus,
   ReleaseRow,
   assetRepo,
+  isClearedRepo,
   kvRepo,
   releaseRepo,
   userRepo,
@@ -360,11 +361,16 @@ app.get('/releases/:key', (c) => {
   }
 
   const parsedRelease = row._parsed!
+  const clears = isClearedRepo.listForRelease(releaseId)
 
   const allUsers = userRepo.all()
 
-  const mapArtist = (c: DDEXContributor) =>
-    html`<li><span>${c.name}</span>: <em>${c.role}</em></li>`
+  const mapArtist = (section: string) => (c: DDEXContributor) =>
+    html`<tr>
+      <td>${c.name}</td>
+      <td>${c.role}</td>
+      <td>${section}</td>
+    </tr>`
 
   return c.html(
     Layout(
@@ -403,25 +409,27 @@ app.get('/releases/:key', (c) => {
                     </button>
                   </div>
                   <div style="flex-grow: 1">
-                    <div>
-                      <h4 style="margin-bottom: 0">${sr.title}</h4>
-                      <em>${sr.artists[0]?.name}</em>
+                    <div style="padding: 10px 0">
+                      <div style="float: right">
+                        ${clears[sr.isrc!] === true && (
+                          <mark class="cleared">Cleared</mark>
+                        )}
+                        ${clears[sr.isrc!] === false && (
+                          <mark class="not-cleared">Not Cleared</mark>
+                        )}
+                      </div>
+                      <h4>${sr.title}</h4>
                     </div>
 
-                    <div style="margin-left: 10px; display: none">
-                      <h6>Artists</h6>
-                      <ul>
-                        ${sr.artists.map(mapArtist)}
-                      </ul>
-                      <h6>Contributors</h6>
-                      <ul>
-                        ${sr.contributors.map(mapArtist)}
-                      </ul>
-                      <h6>Indirect Contributors</h6>
-                      <ul>
-                        ${sr.indirectContributors.map(mapArtist)}
-                      </ul>
-                    </div>
+                    <table style="display: block; font-size: 90%;">
+                      <tbody>
+                        ${sr.artists.map(mapArtist('Artist'))}
+                        ${sr.contributors.map(mapArtist('Contributor'))}
+                        ${sr.indirectContributors.map(
+                          mapArtist('Indicrect Contributor')
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </article>
               `
@@ -431,24 +439,24 @@ app.get('/releases/:key', (c) => {
           </div>
           <hr />
 
-          ${!IS_PROD &&
-          html`
-            <div>
-              ${debugLinks(row)}
+          <div>
+            ${debugLinks(row)}
 
-              <hr />
+            <hr />
 
-              ${row.entityType == 'track' &&
-              html` <a href="${API_HOST}/v1/full/tracks/${row.entityId}">
-                Track: ${row.entityId}
-              </a>`}
-              ${row.entityType == 'album' &&
-              html` <a href="${API_HOST}/v1/full/playlists/${row.entityId}">
-                Album: ${row.entityId}
-              </a>`}
+            ${row.entityType == 'track' &&
+            html` <a href="${API_HOST}/v1/full/tracks/${row.entityId}">
+              Track: ${row.entityId}
+            </a>`}
+            ${row.entityType == 'album' &&
+            html` <a href="${API_HOST}/v1/full/playlists/${row.entityId}">
+              Album: ${row.entityId}
+            </a>`}
 
-              <hr />
+            <hr />
 
+            ${!IS_PROD &&
+            html`
               <details>
                 <summary>Test Publish</summary>
                 <form action="/publish/${releaseId}">
@@ -461,8 +469,8 @@ app.get('/releases/:key', (c) => {
                   <button>publish</button>
                 </form>
               </details>
-            </div>
-          `}
+            `}
+          </div>
         </div>
         <script>
           function play(url) {
@@ -480,6 +488,14 @@ app.get('/releases/:key', (c) => {
             }
           }
         </script>
+        <style>
+          .cleared {
+            background: lightgreen;
+          }
+          .not-cleared {
+            background: lightpink;
+          }
+        </style>
       `,
       parsedRelease.title
     )

@@ -54,18 +54,18 @@ export async function clmReport() {
 
   // push to S3
   {
-    const { clm } = sources.reporting()
-    const s3Client = dialS3(clm)
+    const { mri } = sources.reporting()
+    const s3Client = dialS3(mri)
     const key = `inputs/clm/${fileName}`
     await s3Client.send(
       new PutObjectCommand({
-        Bucket: clm.awsBucket,
+        Bucket: mri.awsBucket,
         Key: key,
         Body: result,
         ContentType: 'text/csv',
       })
     )
-    console.log(`wrote to s3. bucket=${clm.awsBucket} key=${key}`)
+    console.log(`wrote to s3. bucket=${mri.awsBucket} key=${key}`)
   }
 }
 

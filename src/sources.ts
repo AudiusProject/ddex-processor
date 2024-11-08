@@ -10,8 +10,7 @@ const sourcesLocation =
 type SourcesFile = {
   sources: SourceConfig[]
   reporting: {
-    clm: BucketConfig
-    lsr: BucketConfig
+    mri: BucketConfig
   }
 }
 

@@ -84,6 +84,15 @@ create table if not exists s3markers (
       fileName text not null,
       PRIMARY KEY (source, releaseId, ref)
     );
+  `,
+  sql`
+    create table isCleared (
+      releaseId text not null,
+      trackId text not null,
+      isMatched boolean,
+      isCleared boolean,
+      PRIMARY KEY (releaseId, trackId)
+    );
   `
 )
 
@@ -444,6 +453,31 @@ export const kvRepo = {
 }
 
 //
+// isCleared repo
+//
+
+export type IsClearedRow = {
+  releaseId: string
+  trackId: string
+  isMatched: string
+  isCleared: string
+}
+
+export const isClearedRepo = {
+  upsert(c: IsClearedRow) {
+    dbUpsert('isCleared', c)
+  },
+  listForRelease(releaseId: string) {
+    const rows = dbSelect<IsClearedRow>('isCleared', { releaseId })
+    const t: Record<string, boolean> = {}
+    for (const row of rows) {
+      t[row.trackId] = row.isCleared == 't'
+    }
+    return t
+  },
+}
+
+//
 // db utils
 //
 
@@ -456,20 +490,20 @@ function toStmt(rawSql: string) {
   return stmtCache[rawSql]
 }
 
-function dbSelect(table: string, data: Record<string, any>) {
+function dbSelect<T>(table: string, data: Partial<T>) {
   const wheres = Object.keys(data)
     .map((k) => ` ${k} = ? `)
     .join(' AND ')
   const rawSql = `select * from ${table} where ${wheres}`
-  return toStmt(rawSql).all(...Object.values(data))
+  return toStmt(rawSql).all(...Object.values(data)) as T[]
 }
 
-function dbSelectOne(table: string, data: Record<string, any>) {
+function dbSelectOne<T>(table: string, data: Partial<T>) {
   const wheres = Object.keys(data)
     .map((k) => ` ${k} = ? `)
     .join(' AND ')
   const rawSql = `select * from ${table} where ${wheres}`
-  return toStmt(rawSql).get(...Object.values(data))
+  return toStmt(rawSql).get(...Object.values(data)) as T | undefined
 }
 
 function dbUpdate(table: string, pkField: string, data: Record<string, any>) {

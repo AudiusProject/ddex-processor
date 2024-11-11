@@ -11,7 +11,12 @@ prod::
 
 
 DATE := $(shell date +%Y-%m-%d)
+STAGE_FOLDER := backups/stage/$(DATE)
+backup.stage::
+	mkdir -p $(STAGE_FOLDER)
+	rsync stage-ddex:fut/data/* $(STAGE_FOLDER)
+
 FOLDER := backups/$(DATE)
-backup::
+backup.prod::
 	mkdir -p $(FOLDER)
 	rsync prod-ddex:fut/data/* $(FOLDER)

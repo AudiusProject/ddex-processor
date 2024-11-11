@@ -18,7 +18,7 @@ type LsrRow = {
   is_non_music: string
 }
 
-async function fromS3() {
+export async function pollForNewLSRFiles() {
   const { mri } = sources.reporting()
   const client = dialS3(mri)
   const bucket = mri.awsBucket
@@ -33,9 +33,11 @@ async function fromS3() {
   }
 
   for (const c of result.Contents) {
-    if (!c.Key) continue
+    if (!c.Key?.includes('.csv')) continue
 
-    console.log(c.Key)
+    if (isClearedRepo.isLsrDone(c.Key)) continue
+
+    console.log('Read LSR:', c.Key)
 
     if (c.Key.toLowerCase().includes('.csv')) {
       const { Body } = await client.send(
@@ -56,7 +58,7 @@ async function fromS3() {
         readLsrFile(data!)
       }
 
-      // todo: mark key as done... skip next time
+      isClearedRepo.markLsrDone(c.Key)
     }
   }
 
@@ -91,8 +93,6 @@ async function readLsrFile(csv: string | Buffer) {
 
     const [_ddex, source, releaseId, isrc] = row.client_catalog_id.split('_')
 
-    console.log(source, row)
-
     isClearedRepo.upsert({
       releaseId,
       trackId: isrc,
@@ -101,5 +101,3 @@ async function readLsrFile(csv: string | Buffer) {
     })
   }
 }
-
-fromS3()

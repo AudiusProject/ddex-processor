@@ -6,6 +6,7 @@ import { releaseRepo } from './src/db'
 import { parseDelivery, reParsePastXml } from './src/parseDelivery'
 import { publishValidPendingReleases } from './src/publishRelease'
 import { clmReport } from './src/reporting'
+import { pollForNewLSRFiles } from './src/reporting_lsr'
 import { pollS3 } from './src/s3poller'
 import { sync } from './src/s3sync'
 import { getSdk } from './src/sdk'
@@ -139,6 +140,13 @@ program
     clmReport()
   })
 
+program
+  .command('report-lsr')
+  .description('Parse LSR files')
+  .action(async () => {
+    pollForNewLSRFiles()
+  })
+
 program.command('cleanup').description('remove temp files').action(cleanupFiles)
 
 program.parse()
@@ -151,7 +159,13 @@ async function startWorker() {
     await sleep(3_000)
     console.log('polling...')
     await pollS3()
-    await publishValidPendingReleases()
+    await pollForNewLSRFiles()
+
+    // for now we publish manually via CLI
+    // because album publish can fail
+    // want to have human in loop to clean up orphans tracks when that happens.
+    // await publishValidPendingReleases()
+
     await sleep(3 * 60_000)
   }
 }

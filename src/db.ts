@@ -498,6 +498,16 @@ export const isClearedRepo = {
       where releases.key = clearCount.releaseId
     `)
   },
+
+  isLsrDone(s3url: string) {
+    const row = db.get<KVRow>(sql`select val from kv where key = ${s3url}`)
+    return !!row
+  },
+
+  markLsrDone(s3url: string) {
+    const val = new Date().toString()
+    db.run(sql`insert into kv values (${s3url}, ${val}) on conflict do nothing`)
+  },
 }
 
 //

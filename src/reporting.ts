@@ -1,16 +1,29 @@
 import { PutObjectCommand } from '@aws-sdk/client-s3'
+import sql from '@radically-straightforward/sqlite'
 import { stringify } from 'csv-stringify/sync'
 import { mkdir, writeFile } from 'fs/promises'
 import path from 'path'
-import { releaseRepo } from './db'
+import { releaseRepo, s3markerRepo } from './db'
 import { dialS3 } from './s3poller'
 import { sources } from './sources'
 
 export async function clmReport() {
-  // todo: load cursors to only do new / updated releases for each source
+  const markerKey = 'report_clm'
+  let marker = s3markerRepo.get(markerKey) || '2024-10-26'
 
-  const releases = releaseRepo.all()
+  const releases = releaseRepo.rawSelect(sql`
+    select * from releases
+    where releaseType != 'TrackRelease'
+    and messageTimestamp > ${marker}
+    order by messageTimestamp asc
+  `)
+  if (releases.length == 0) {
+    console.log('no new CLM releases')
+    return
+  }
+
   const rows = releases.flatMap((releaseRow) => {
+    marker = releaseRow.messageTimestamp
     const r = releaseRow._parsed!
     return r.soundRecordings.map((track) => {
       if (!track.isrc) {
@@ -51,9 +64,11 @@ export async function clmReport() {
   // console.log(result)
   await mkdir('reports', { recursive: true })
   await writeFile(path.join('reports', fileName), result)
+  console.log(`wrote reports/${fileName}`)
 
   // push to S3
-  {
+  const doWrite = true
+  if (doWrite) {
     const { mri } = sources.reporting()
     const s3Client = dialS3(mri)
     const key = `inputs/clm/${fileName}`
@@ -67,6 +82,10 @@ export async function clmReport() {
     )
     console.log(`wrote to s3. bucket=${mri.awsBucket} key=${key}`)
   }
+
+  // update marker
+  console.log(`Update marker ${markerKey}=${marker}`)
+  s3markerRepo.upsert(markerKey, marker)
 }
 
 function padToTwoDigits(num: number) {

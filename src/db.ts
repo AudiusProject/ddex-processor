@@ -1,4 +1,4 @@
-import sql, { Database } from '@radically-straightforward/sqlite'
+import sql, { Database, Query } from '@radically-straightforward/sqlite'
 import { Statement } from 'better-sqlite3'
 import { randomBytes } from 'node:crypto'
 import { DDEXRelease, DDEXReleaseIds } from './parseDelivery'
@@ -315,6 +315,14 @@ export const releaseRepo = {
     return rows
   },
 
+  rawSelect(q: Query) {
+    const rows = db.all<ReleaseRow>(q)
+    for (const row of rows) {
+      if (row.json) row._parsed = JSON.parse(row.json)
+    }
+    return rows
+  },
+
   get(key: string) {
     const row = db.get<ReleaseRow>(
       sql`select * from releases where key = ${key}`
@@ -568,8 +576,9 @@ function dbUpsert(table: string, data: Record<string, any>) {
   return toStmt(rawSql).run(...Object.values(data))
 }
 
-function ifdef(obj: any, snippet: any) {
-  return obj ? snippet : sql``
+function ifdef(obj: any, snippet: any, fallback?: any) {
+  fallback ||= sql``
+  return obj ? snippet : fallback
 }
 
 // shutdown

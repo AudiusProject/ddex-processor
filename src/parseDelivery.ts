@@ -218,9 +218,6 @@ export function parseDdexXml(source: string, xmlUrl: string, xmlText: string) {
     // create or replace this release in db
     const releases = parseReleaseXml(source, $)
     for (const release of releases) {
-      if (isUpdate) {
-        console.log(`update`, xmlUrl)
-      }
       releaseRepo.upsert(source, xmlUrl, messageTimestamp, release)
     }
     return releases

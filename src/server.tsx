@@ -12,7 +12,6 @@ import { HtmlEscapedString } from 'hono/utils/html'
 import { cool } from './_cool'
 import {
   ReleaseProcessingStatus,
-  ReleaseRow,
   assetRepo,
   isClearedRepo,
   kvRepo,
@@ -353,7 +352,7 @@ ${row._parsed?.soundRecordings.length} tracks"
                       ${row.entityId}
                     </a>`}
                   </td>
-                  <td>${debugLinks(row)}</td>
+                  <td>${debugLinks(row.xmlUrl, row.key)}</td>
                 </tr>`
             )}
           </tbody>
@@ -457,7 +456,7 @@ app.get('/releases/:key', (c) => {
           <hr />
 
           <div>
-            ${debugLinks(row)}
+            ${debugLinks(row.xmlUrl, row.key)}
 
             <hr />
 
@@ -516,6 +515,37 @@ app.get('/releases/:key', (c) => {
       `,
       parsedRelease.title
     )
+  )
+})
+
+app.get('/history/:key', async (c) => {
+  const xmls = xmlRepo.find(c.req.param('key'))
+  return c.html(
+    Layout(html`
+      <table>
+        <thead>
+          <tr>
+            <th>S3</th>
+            <th>Message Timestamp</th>
+            <th>Created At</th>
+            <th>Debug</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${xmls.map((x) => (
+            <tr>
+              <td>
+                <a href="">{x.xmlUrl}</a>
+              </td>
+              <td>{x.messageTimestamp}</td>
+              <td>{x.createdAt}</td>
+              <td>{debugLinks(x.xmlUrl)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    `)
   )
 })
 
@@ -708,17 +738,17 @@ function audiusUserLink(id: string) {
   >`
 }
 
-function debugLinks(row: ReleaseRow) {
+function debugLinks(xmlUrl: string, releaseId?: string) {
   return html`
-    <a href="/xmls/${encodeURIComponent(row.xmlUrl)}" target="_blank">xml</a>
+    <a href="/xmls/${encodeURIComponent(xmlUrl)}" target="_blank">xml</a>
 
-    <a
-      href="/releases/${encodeURIComponent(row.key)}/json?pretty"
-      target="_blank"
-      >parsed</a
-    >
+    <a href="/xmls/${encodeURIComponent(xmlUrl)}?parse=true" target="_blank">
+      parsed
+    </a>
 
-    <a href="/xmls/${encodeURIComponent(row.xmlUrl)}?parse=sdk">sdk</a>
+    <a href="/xmls/${encodeURIComponent(xmlUrl)}?parse=sdk">sdk</a>
+
+    ${releaseId && html`<a href="/history/${releaseId}">history</a>`}
   `
 }
 

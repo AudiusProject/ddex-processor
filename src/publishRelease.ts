@@ -264,6 +264,10 @@ export function prepareTrackMetadatas(
             meta.previewStartSeconds = sound.previewStartSeconds
           }
 
+          if (sound.isrc) {
+            meta.isrc = sound.isrc
+          }
+
           if (deal.forStream) {
             meta.isStreamGated = true
             meta.streamConditions = cond

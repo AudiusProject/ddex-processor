@@ -4,7 +4,10 @@ import { program } from 'commander'
 import { cleanupFiles } from './src/cleanupFiles'
 import { releaseRepo } from './src/db'
 import { parseDelivery, reParsePastXml } from './src/parseDelivery'
-import { publishValidPendingReleases } from './src/publishRelease'
+import {
+  prepareTrackMetadatas,
+  publishValidPendingReleases,
+} from './src/publishRelease'
 import { clmReport } from './src/reporting'
 import { pollForNewLSRFiles } from './src/reporting_lsr'
 import { pollS3 } from './src/s3poller'
@@ -145,6 +148,78 @@ program
   .description('Parse LSR files')
   .action(async () => {
     pollForNewLSRFiles()
+  })
+
+program
+  .command('republish-album')
+  .description('issue sdk updates for all album tracks')
+  .argument('<release_id>', 'release ID to republish')
+  .action(async (releaseId) => {
+    const releaseRow = releaseRepo.get(releaseId)
+    if (!releaseRow) {
+      throw new Error(`Release ID ${releaseId} not found`)
+    }
+    if (releaseRow.entityType != 'album') {
+      throw new Error(`Release ID ${releaseId} must be a published album`)
+    }
+
+    console.log(
+      'republish',
+      releaseId,
+      releaseRow.entityType,
+      releaseRow.entityId
+    )
+    const sourceConfig = sources.findByName(releaseRow.source)!
+    const sdk = getSdk(sourceConfig)
+
+    // await new Promise((r) => setTimeout(r, 1_000))
+    // const sel = await sdk.services.discoveryNodeSelector.getSelectedEndpoint()
+    // console.log('selected', sel)
+    // await new Promise((r) => setTimeout(r, 1_000))
+
+    // I want to do this but it hangs forever :shrug:
+    // const sdkAlbum = await sdk.full.playlists.getPlaylist({
+    //   playlistId: releaseRow.entityId!,
+    // })
+
+    const IS_PROD = process.env.NODE_ENV == 'production'
+    const API_HOST = IS_PROD
+      ? 'https://discoveryprovider2.audius.co'
+      : 'https://discoveryprovider2.staging.audius.co'
+
+    const u1 = `${API_HOST}/v1/full/playlists/${releaseRow.entityId!}`
+    const sdkAlbum = await fetch(u1).then((r) => r.json())
+
+    const trackUpdates = prepareTrackMetadatas(
+      sourceConfig,
+      releaseRow._parsed!
+    )
+
+    for (const sdkTrack of sdkAlbum.data![0].tracks) {
+      const trackUpdate = trackUpdates.find((s) => s.title == sdkTrack.title)
+      if (!trackUpdate) {
+        throw new Error(`failed to find track record for: ${sdkTrack.title}`)
+      }
+
+      console.log('update track', sdkTrack.id, sdkTrack.title, trackUpdate)
+
+      // this is needed if transcodePreview is true
+      // latest.audioUploadId = apiTrack.audio_upload_id
+
+      try {
+        await sdk.tracks.updateTrack({
+          trackId: sdkTrack.id,
+          userId: sdkTrack.user.id,
+          metadata: trackUpdate,
+          transcodePreview: false,
+        })
+      } catch (e) {
+        console.log('track update failed', sdkTrack.id, sdkTrack.title, e)
+        throw e
+      }
+    }
+
+    process.exit(0)
   })
 
 program.command('cleanup').description('remove temp files').action(cleanupFiles)

@@ -11,6 +11,16 @@ export async function clmReport() {
   const markerKey = 'report_clm'
   let marker = s3markerRepo.get(markerKey) || '2024-10-26'
 
+  // don't run twice on same day
+  const todayDate = new Date().toISOString().substring(0, 10)
+  const markerDate = marker.substring(0, 10)
+  if (markerDate == todayDate) {
+    console.log('Skipping CLM report (marker too recent)')
+    return
+  } else {
+    console.log('Running CLM report')
+  }
+
   const releases = releaseRepo.rawSelect(sql`
     select * from releases
     where releaseType != 'TrackRelease'

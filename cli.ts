@@ -160,12 +160,13 @@ async function startWorker() {
     console.log('polling...')
     await pollS3()
     await pollForNewLSRFiles()
+    await clmReport()
 
     // for now we publish manually via CLI
     // because album publish can fail
     // want to have human in loop to clean up orphans tracks when that happens.
     // await publishValidPendingReleases()
 
-    await sleep(3 * 60_000)
+    await sleep(10 * 60_000)
   }
 }

@@ -249,7 +249,10 @@ export function prepareTrackMetadatas(
         }
 
         if (deal.audiusDealType == 'PayGated') {
-          const payTo = source.payoutUserId || release.audiusUser!
+          const payTo =
+            source.labelUserIds[release.labelName] ||
+            source.payoutUserId ||
+            release.audiusUser!
           const priceUsd = deal.priceUsd || DEFAULT_TRACK_PRICE
           console.log({ payTo, priceUsd })
 
@@ -381,7 +384,10 @@ export function prepareAlbumMetadata(
 
   for (const deal of release.deals) {
     if (deal.audiusDealType == 'PayGated') {
-      const payTo = source.payoutUserId || release.audiusUser!
+      const payTo =
+        source.labelUserIds[release.labelName] ||
+        source.payoutUserId ||
+        release.audiusUser!
       const priceUsd = deal.priceUsd || DEFAULT_ALBUM_PRICE
 
       const cond = {

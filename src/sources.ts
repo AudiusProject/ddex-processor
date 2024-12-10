@@ -28,6 +28,7 @@ export type SourceConfig = BucketConfig & {
   ddexSecret: string
   placementHosts?: string
   payoutUserId?: string
+  labelUserIds: Record<string, string>
 }
 
 let sourcesFile: SourcesFile
@@ -43,6 +44,14 @@ export const sources = {
 
     // validate
     for (const source of sourcesFile.sources) {
+      if (!source.labelUserIds) {
+        source.labelUserIds = {}
+      }
+      for (const [labelName, id] of Object.entries(source.labelUserIds)) {
+        if (!decodeId(id)) {
+          throw new Error(`Invalid labelUserId for ${labelName}: ${id}`)
+        }
+      }
       if (source.payoutUserId && !decodeId(source.payoutUserId)) {
         throw new Error(
           `Invalid payoutUserId for ${source.name}.  Must be encoded int id.`

@@ -187,8 +187,8 @@ program
       ? 'https://discoveryprovider2.audius.co'
       : 'https://discoveryprovider2.staging.audius.co'
 
-    const u1 = `${API_HOST}/v1/full/playlists/${releaseRow.entityId!}`
-    const sdkAlbum = await fetch(u1).then((r) => r.json())
+    const albumUrl = `${API_HOST}/v1/full/playlists/${releaseRow.entityId!}`
+    const sdkAlbum = await fetch(albumUrl).then((r) => r.json())
 
     const trackUpdates = prepareTrackMetadatas(
       sourceConfig,

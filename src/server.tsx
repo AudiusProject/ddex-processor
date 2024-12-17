@@ -207,6 +207,7 @@ app.use('*', async (c, next) => {
 })
 
 app.get('/releases', (c) => {
+  const queryCleared = c.req.query('cleared') == 'on'
   const querySearch = c.req.query('search')
   const queryStatus = c.req.query('status')
   const querySource = c.req.query('source')
@@ -219,6 +220,7 @@ app.get('/releases', (c) => {
     limit,
     offset,
     search: querySearch,
+    cleared: queryCleared,
   })
 
   function withQueryParam(k: string, v: any) {
@@ -261,6 +263,16 @@ app.get('/releases', (c) => {
                     </option>`
                 )}
             </select>
+            <label style="display: flex; align-items: center;">
+              <input
+                name="cleared"
+                type="checkbox"
+                role="switch"
+                ${queryCleared ? 'checked' : ''}
+                onchange="this.form.submit()"
+              />
+              Cleared
+            </label>
           </form>
 
           <div style="flex-grow: 1"></div>

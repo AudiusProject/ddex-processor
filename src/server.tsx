@@ -209,11 +209,21 @@ app.use('*', async (c, next) => {
 app.get('/releases', (c) => {
   const queryStatus = c.req.query('status')
   const querySource = c.req.query('source')
+  const limit = parseInt(c.req.query('limit') || '500')
+  const offset = parseInt(c.req.query('offset') || '0')
   const rows = releaseRepo.all({
     status: queryStatus,
     source: querySource,
     pendingPublish: parseBool(c.req.query('pendingPublish')),
+    limit,
+    offset,
   })
+
+  function withQueryParam(k: string, v: any) {
+    const u = new URL(c.req.url)
+    u.searchParams.set(k, v)
+    return u.toString()
+  }
 
   return c.html(
     Layout(
@@ -251,6 +261,24 @@ app.get('/releases', (c) => {
           <form method="POST" action="/releases/reparse">
             <button class="outline hidden">re-parse</button>
           </form>
+
+          <div>
+            <a
+              role="button"
+              class="outline contrast"
+              href="${withQueryParam('offset', offset - limit)}"
+              ${offset == 0 ? 'disabled' : ''}
+            >
+              ⫷
+            </a>
+            <a
+              role="button"
+              class="outline contrast"
+              href="${withQueryParam('offset', limit + offset)}"
+            >
+              ⫸
+            </a>
+          </div>
         </div>
 
         <table>
@@ -577,7 +605,7 @@ app.get('/release/:key/:type/:ref/:size?', async (c) => {
     }
   }
   c.header('Cache-Control', 'max-age=7200')
-  return c.body(ok.buffer)
+  return c.body(ok.buffer as any)
 })
 
 app.get('/xmls/:xmlUrl', (c) => {

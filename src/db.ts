@@ -267,6 +267,8 @@ type FindReleaseParams = {
   pendingPublish?: boolean
   status?: string
   source?: string
+  limit?: number
+  offset?: number
 }
 
 export const releaseRepo = {
@@ -307,6 +309,9 @@ export const releaseRepo = {
       $${ifdef(params.source, sql` and source = ${params.source} `)}
 
       order by messageTimestamp desc
+
+      $${ifdef(params.limit, sql` limit ${params.limit} `)}
+      $${ifdef(params.offset, sql` offset ${params.offset} `)}
     `)
 
     for (const row of rows) {

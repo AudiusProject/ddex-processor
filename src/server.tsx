@@ -207,6 +207,7 @@ app.use('*', async (c, next) => {
 })
 
 app.get('/releases', (c) => {
+  const querySearch = c.req.query('search')
   const queryStatus = c.req.query('status')
   const querySource = c.req.query('source')
   const limit = parseInt(c.req.query('limit') || '500')
@@ -217,6 +218,7 @@ app.get('/releases', (c) => {
     pendingPublish: parseBool(c.req.query('pendingPublish')),
     limit,
     offset,
+    search: querySearch,
   })
 
   function withQueryParam(k: string, v: any) {
@@ -233,6 +235,12 @@ app.get('/releases', (c) => {
         <div style="display: flex; gap: 10px;">
           <!-- filters -->
           <form style="display: flex; gap: 10px;">
+            <input
+              type="search"
+              name="search"
+              placeholder="Search"
+              value="${querySearch}"
+            />
             <select name="status" onchange="this.form.submit()">
               <option selected value="">Status</option>
               ${Object.values(ReleaseProcessingStatus).map(

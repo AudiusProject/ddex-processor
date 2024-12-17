@@ -269,6 +269,7 @@ type FindReleaseParams = {
   source?: string
   limit?: number
   offset?: number
+  search?: string
 }
 
 export const releaseRepo = {
@@ -307,6 +308,8 @@ export const releaseRepo = {
       $${ifdef(params.status, sql` and status = ${params.status} `)}
 
       $${ifdef(params.source, sql` and source = ${params.source} `)}
+
+      $${ifdef(params.search, sql` and json like '%' || ${params.search} || '%' `)}
 
       order by messageTimestamp desc
 

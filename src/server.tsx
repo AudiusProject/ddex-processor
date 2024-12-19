@@ -229,6 +229,16 @@ app.get('/releases', (c) => {
     return u.toString()
   }
 
+  function searchLink(val?: string) {
+    if (!val) return
+    return html`<a
+      class="plain contrast"
+      href="${withQueryParam('search', `"${val}"`)}"
+    >
+      ${val}
+    </a>`
+  }
+
   return c.html(
     Layout(
       html`
@@ -337,21 +347,22 @@ app.get('/releases', (c) => {
                     <div>
                       ${row._parsed?.audiusUser
                         ? audiusUserLink(row._parsed?.audiusUser)
-                        : row._parsed?.artists[0]?.name}
+                        : searchLink(row._parsed?.artists[0]?.name)}
                     </div>
                     <small>
                       <em
                         title="${row.messageTimestamp}"
                         class="pico-color-grey-500"
                       >
-                        ${row._parsed?.labelName} via ${row.source}
+                        ${searchLink(row._parsed?.labelName)} via ${row.source}
                       </em>
                     </small>
                   </td>
 
                   <td>
-                    ${row._parsed?.genre} <br />
-                    <small>${row._parsed?.subGenre}</small>
+                    ${searchLink(row._parsed?.genre)}
+                    <br />
+                    <small>${searchLink(row._parsed?.subGenre)}</small>
                   </td>
                   <td>
                     ${row.releaseType}
@@ -849,6 +860,9 @@ function Layout(
           }
           .hidden {
             display: none;
+          }
+          a.plain {
+            text-decoration: none;
           }
         </style>
       </head>

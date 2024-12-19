@@ -108,7 +108,20 @@ async function scanS3Prefix(
       const xml = await Body?.transformToString()
       if (xml) {
         console.log('parsing', xmlUrl)
-        parseDdexXml(source, xmlUrl, xml)
+        const releases = parseDdexXml(source, xmlUrl, xml) || []
+
+        // seed resized images so server doesn't have to do at request time
+        for (const release of releases) {
+          for (const img of release.images) {
+            await readAssetWithCaching(
+              xmlUrl,
+              img.filePath,
+              img.fileName,
+              '200',
+              true
+            )
+          }
+        }
       }
     }
   }
@@ -121,7 +134,8 @@ export async function readAssetWithCaching(
   xmlUrl: string,
   filePath: string,
   fileName: string,
-  imageSize: string = ''
+  imageSize: string = '',
+  skipRead?: boolean
 ) {
   // read from s3 + cache to local disk
   if (xmlUrl.startsWith('s3:')) {
@@ -149,6 +163,12 @@ export async function readAssetWithCaching(
         await writeFile(destinationPath, Body as any)
       }
     }
+
+    if (skipRead)
+      return {
+        name: '',
+        buffer: new Uint8Array(),
+      }
 
     return readFileToBuffer(destinationPath)
   }

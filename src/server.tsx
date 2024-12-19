@@ -239,6 +239,7 @@ app.get('/releases', (c) => {
     </a>`
   }
 
+  c.header('Cache-Control', 'max-age=300')
   return c.html(
     Layout(
       html`

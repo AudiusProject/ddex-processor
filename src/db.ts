@@ -95,7 +95,9 @@ create table if not exists s3markers (
     );
   `,
   sql`alter table releases add column numCleared int`,
-  sql`alter table releases add column numNotCleared int`
+  sql`alter table releases add column numNotCleared int`,
+  sql`delete from releases where releaseType = 'TrackRelease'`,
+  sql`create index releaseDateIdx on releases(releaseDate)`
 )
 
 export type XmlRow = {
@@ -357,6 +359,11 @@ export const releaseRepo = {
       const key = releaseRepo.chooseReleaseId(release.releaseIds)
       const prior = releaseRepo.get(key)
       const json = JSON.stringify(release)
+
+      // skip TrackRelease, since we only want main releases
+      if (release.releaseType == 'TrackRelease') {
+        return
+      }
 
       // if prior exists and is newer, skip
       if (prior && prior.messageTimestamp > messageTimestamp) {

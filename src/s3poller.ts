@@ -113,13 +113,15 @@ async function scanS3Prefix(
         // seed resized images so server doesn't have to do at request time
         for (const release of releases) {
           for (const img of release.images) {
-            await readAssetWithCaching(
-              xmlUrl,
-              img.filePath,
-              img.fileName,
-              '200',
-              true
-            )
+            if (img.fileName && img.filePath) {
+              await readAssetWithCaching(
+                xmlUrl,
+                img.filePath,
+                img.fileName,
+                '200',
+                true
+              )
+            }
           }
         }
       }
@@ -156,9 +158,23 @@ export async function readAssetWithCaching(
       const { Body } = await s3.send(new GetObjectCommand({ Bucket, Key }))
       const parsedSize = parseInt(imageSize)
       if (parsedSize) {
-        await sharp(await Body!.transformToByteArray())
-          .resize(parsedSize, parsedSize)
-          .toFile(destinationPath)
+        try {
+          await sharp(await Body!.transformToByteArray())
+            .resize(parsedSize, parsedSize)
+            .toFile(destinationPath)
+        } catch (e) {
+          console.log(
+            `failed to resize image`,
+            xmlUrl,
+            filePath,
+            fileName,
+            imageSize
+          )
+          return {
+            name: '',
+            buffer: new Uint8Array(),
+          }
+        }
       } else {
         await writeFile(destinationPath, Body as any)
       }

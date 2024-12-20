@@ -226,6 +226,7 @@ app.get('/releases', (c) => {
   function withQueryParam(k: string, v: any) {
     const u = new URL(c.req.url)
     u.searchParams.set(k, v)
+    u.searchParams.delete('offset')
     return u.toString()
   }
 

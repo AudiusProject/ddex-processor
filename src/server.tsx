@@ -211,7 +211,7 @@ app.get('/releases', (c) => {
   const querySearch = c.req.query('search')
   const queryStatus = c.req.query('status')
   const querySource = c.req.query('source')
-  const limit = parseInt(c.req.query('limit') || '500')
+  const limit = parseInt(c.req.query('limit') || '100')
   const offset = parseInt(c.req.query('offset') || '0')
   const rows = releaseRepo.all({
     status: queryStatus,

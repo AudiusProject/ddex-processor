@@ -305,7 +305,7 @@ export const releaseRepo = {
     params ||= {}
     const rows = db.all<ReleaseRow>(sql`
       select * from releases
-      where releaseType != 'TrackRelease'
+      where 1=1
 
       -- pending publish
       $${ifdef(

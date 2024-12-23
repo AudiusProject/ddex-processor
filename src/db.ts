@@ -275,6 +275,11 @@ type FindReleaseParams = {
   cleared?: boolean
 }
 
+type StatsRow = {
+  source: string
+  count: number
+}
+
 export const releaseRepo = {
   // todo: this is incomplete, and I'm not sure how to order which ID to use first.
   //   go version used xml file name
@@ -288,6 +293,12 @@ export const releaseRepo = {
       throw new Error(msg)
     }
     return key
+  },
+
+  stats() {
+    return db.all<StatsRow>(
+      sql`select source, count(*) count from releases group by 1`
+    )
   },
 
   all(params?: FindReleaseParams) {

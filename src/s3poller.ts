@@ -159,6 +159,7 @@ export async function readAssetWithCaching(
       const parsedSize = parseInt(imageSize)
       if (parsedSize) {
         try {
+          console.log(`resizing ${destinationPath}`)
           await sharp(await Body!.transformToByteArray())
             .resize(parsedSize, parsedSize)
             .toFile(destinationPath)

@@ -226,7 +226,9 @@ app.get('/releases', (c) => {
   function withQueryParam(k: string, v: any) {
     const u = new URL(c.req.url)
     u.searchParams.set(k, v)
-    u.searchParams.delete('offset')
+    if (k != 'offset') {
+      u.searchParams.delete('offset')
+    }
     return u.toString()
   }
 
@@ -579,6 +581,11 @@ app.get('/releases/:key', (c) => {
   )
 })
 
+app.get('/stats', async (c) => {
+  const stats = releaseRepo.stats()
+  return c.json(stats)
+})
+
 app.get('/history/:key', async (c) => {
   const xmls = xmlRepo.find(c.req.param('key'))
   return c.html(
@@ -873,6 +880,7 @@ function Layout(
           <a href="/"><b>ddex</b></a>
           <a href="/releases">releases</a>
           <a href="/users">users</a>
+          <a href="/stats" target="_blank">stats</a>
         </div>
         <div style="padding: 50px;">${inner}</div>
       </body>

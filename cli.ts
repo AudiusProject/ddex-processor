@@ -2,7 +2,7 @@ import 'dotenv/config'
 
 import { program } from 'commander'
 import { cleanupFiles } from './src/cleanupFiles'
-import { releaseRepo } from './src/db'
+import { releaseRepo, userRepo } from './src/db'
 import { parseDelivery, reParsePastXml } from './src/parseDelivery'
 import {
   prepareTrackMetadatas,
@@ -41,6 +41,62 @@ program
   .description('Publish any valid deliveries')
   .action(async () => {
     reParsePastXml()
+    await publishValidPendingReleases()
+    process.exit(0) // sdk client doesn't know when to quit
+  })
+
+program
+  .command('publish-to-user')
+  .description('Publish a single release to a user')
+  .argument('<releaseId>', 'release ID')
+  .argument('<userId>', 'encoded user ID to publish to')
+  .option(
+    '--prepend-artist',
+    'Prepend artist name: <artist> - <title>.  Useful for label accounts'
+  )
+  .action(async (releaseId, userId, opts) => {
+    const releaseRow = releaseRepo.get(releaseId)
+    const release = releaseRow?._parsed
+    if (!releaseRow || !release) {
+      throw new Error(`release not found: ${releaseId}`)
+    }
+
+    const source = sources.findByName(releaseRow.source)
+    const user = userRepo.findOne({
+      id: userId,
+      apiKey: source?.ddexKey,
+    })
+
+    if (!user) {
+      throw new Error(`connected user not found: ${userId}`)
+    }
+
+    release.audiusUser = userId
+
+    const artistName = release.artists[0].name
+    if (opts.prependArtist) {
+      if (!release.title.startsWith(artistName)) {
+        release.title = `${artistName} - ${release.title}`
+      }
+      for (const s of release.soundRecordings) {
+        if (!s.title.startsWith(artistName)) {
+          s.title = `${artistName} - ${s.title}`
+        }
+      }
+    }
+
+    console.log(JSON.stringify(release, undefined, 2))
+    console.log('publishing in 5s...')
+
+    await sleep(5_000)
+
+    releaseRepo.upsert(
+      releaseRow.source,
+      releaseRow.xmlUrl,
+      releaseRow.messageTimestamp,
+      release
+    )
+
     await publishValidPendingReleases()
     process.exit(0) // sdk client doesn't know when to quit
   })

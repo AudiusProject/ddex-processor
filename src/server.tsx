@@ -7,6 +7,7 @@ import { Context, Hono } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
 import { html } from 'hono/html'
 import { decode } from 'hono/jwt'
+import { logger } from 'hono/logger'
 import { prettyJSON } from 'hono/pretty-json'
 import { HtmlEscapedString } from 'hono/utils/html'
 import { cool } from './_cool'
@@ -59,6 +60,7 @@ export type Variables = {
   me: Awaited<ReturnType<typeof getAudiusUser>>
 }
 const app = new Hono<{ Variables: Variables }>()
+app.use(logger())
 app.use(prettyJSON({ space: 4 }))
 app.use('/static/*', serveStatic({ root: './' }))
 

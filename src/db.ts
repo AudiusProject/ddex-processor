@@ -218,8 +218,13 @@ export const userRepo = {
 //
 
 export const xmlRepo = {
-  all() {
-    return db.all<XmlRow>(sql`select * from xmls order by xmlUrl`)
+  all(cursor: string) {
+    return db.all<XmlRow>(sql`
+      select * from xmls
+      where xmlUrl > ${cursor}
+      order by xmlUrl
+      limit 1000
+      `)
   },
 
   get(xmlUrl: string) {

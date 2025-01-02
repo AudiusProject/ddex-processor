@@ -163,9 +163,17 @@ export async function parseDelivery(source: string, maybeZip: string) {
 
 export function reParsePastXml() {
   // loop over db xml and reprocess
-  const rows = xmlRepo.all()
-  for (const row of rows) {
-    parseDdexXml(row.source, row.xmlUrl, row.xmlText)
+  let cursor = ''
+  while (true) {
+    console.log({ cursor })
+    const rows = xmlRepo.all(cursor)
+    if (!rows.length) {
+      break
+    }
+    for (const row of rows) {
+      parseDdexXml(row.source, row.xmlUrl, row.xmlText)
+      cursor = row.xmlUrl
+    }
   }
 }
 

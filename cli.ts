@@ -267,7 +267,7 @@ program
           trackId: sdkTrack.id,
           userId: sdkTrack.user.id,
           metadata: trackUpdate,
-          transcodePreview: false,
+          // transcodePreview: false,
         })
       } catch (e) {
         console.log('track update failed', sdkTrack.id, sdkTrack.title, e)

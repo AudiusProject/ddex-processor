@@ -10,7 +10,6 @@ import { decode } from 'hono/jwt'
 import { logger } from 'hono/logger'
 import { prettyJSON } from 'hono/pretty-json'
 import { HtmlEscapedString } from 'hono/utils/html'
-import { cool } from './_cool'
 import {
   ReleaseProcessingStatus,
   assetRepo,
@@ -740,8 +739,6 @@ app.get('/users', (c) => {
     )
   )
 })
-
-app.route('/cool', cool)
 
 app.get('/publish/:releaseId', async (c) => {
   if (IS_PROD) {

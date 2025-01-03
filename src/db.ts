@@ -10,7 +10,7 @@ const db = new Database(dbLocation)
 
 db.pragma('journal_mode = WAL')
 db.pragma('synchronous = NORMAL')
-db.pragma('busy_timeout = 5000')
+// db.pragma('busy_timeout = 5000')
 db.pragma('cache_size = -20000')
 db.pragma('auto_vacuum = INCREMENTAL')
 db.pragma('temp_store = MEMORY')
@@ -97,7 +97,8 @@ create table if not exists s3markers (
   sql`alter table releases add column numCleared int`,
   sql`alter table releases add column numNotCleared int`,
   sql`delete from releases where releaseType = 'TrackRelease'`,
-  sql`create index releaseDateIdx on releases(releaseDate)`
+  sql`create index releaseDateIdx on releases(releaseDate)`,
+  sql`create index messageTimestampIdx on releases(messageTimestamp)`
 )
 
 export type XmlRow = {
@@ -259,9 +260,9 @@ export type AssetRow = {
 }
 
 export const assetRepo = {
-  get(releaseId: string, ref: string) {
+  get(source: string, releaseId: string, ref: string) {
     return db.get<AssetRow>(
-      sql`select * from assets where releaseId = ${releaseId} and ref = ${ref}`
+      sql`select * from assets where source = ${source} and releaseId = ${releaseId} and ref = ${ref}`
     )
   },
 }

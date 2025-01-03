@@ -336,8 +336,8 @@ app.get('/releases', (c) => {
                 html` <tr>
                   <td style="min-width: 80px;">
                     <img
-                      src="/release/${row.key}/images/${row._parsed?.images[0]
-                        ?.ref}/200"
+                      src="/release/${row.source}/${row.key}/${row._parsed
+                        ?.images[0]?.ref}/200"
                       width="80"
                       height="80"
                     />
@@ -458,7 +458,7 @@ app.get('/releases/:key', (c) => {
         <div style="display: flex; gap: 20px">
           <div style="text-align: center">
             <img
-              src="/release/${row.key}/images/${parsedRelease.images[0]
+              src="/release/${row.source}/${row.key}/${parsedRelease.images[0]
                 ?.ref}/200"
               style="width: 200px; height: 200px; display: block; margin-bottom: 10px"
             />
@@ -483,7 +483,7 @@ app.get('/releases/:key', (c) => {
                   <div>
                     <button
                       class="outline contrast"
-                      onClick="play('/release/${row.key}/soundRecordings/${sr.ref}')"
+                      onClick="play('/release/${row.source}/${row.key}/${sr.ref}')"
                     >
                       play
                     </button>
@@ -618,15 +618,13 @@ app.get('/history/:key', async (c) => {
   )
 })
 
-app.get('/release/:key/:type/:ref/:size?', async (c) => {
+app.get('/release/:source/:key/:ref/:size?', async (c) => {
+  const source = c.req.param('source')
   const key = c.req.param('key')!
-  const type = c.req.param('type')
   const ref = c.req.param('ref')
   const size = c.req.param('size')
-  const row = releaseRepo.get(key)
-  if (!row) return c.json({ error: 'not found' }, 404)
 
-  const asset = assetRepo.get(key, ref)
+  const asset = assetRepo.get(source, key, ref)
   if (!asset) return c.json({ error: 'not found' }, 404)
 
   const ok = await readAssetWithCaching(

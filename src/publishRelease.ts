@@ -72,7 +72,7 @@ export async function publishRelease(
 
   // read asset file
   async function resolveFile({ ref }: DDEXResource) {
-    const asset = assetRepo.get(releaseRow.key, ref)
+    const asset = assetRepo.get(source.name, releaseRow.key, ref)
     if (!asset) {
       throw new Error(`failed to resolve asset ${releaseRow.key} ${ref}`)
     }

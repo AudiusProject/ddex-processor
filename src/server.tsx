@@ -224,6 +224,8 @@ app.get('/releases', (c) => {
     cleared: queryCleared,
   })
 
+  const showPagination = offset || rows.length == limit
+
   function withQueryParam(k: string, v: any) {
     const u = new URL(c.req.url)
     u.searchParams.set(k, v)
@@ -251,13 +253,8 @@ app.get('/releases', (c) => {
 
         <div style="display: flex; gap: 10px;">
           <!-- filters -->
-          <form style="display: flex; gap: 10px;">
-            <input
-              type="search"
-              name="search"
-              placeholder="Search"
-              value="${querySearch}"
-            />
+          <form style="display: flex; flex-grow: 1; gap: 10px;">
+            <input name="search" placeholder="Search" value="${querySearch}" />
             <select name="status" onchange="this.form.submit()">
               <option selected value="">Status</option>
               ${Object.values(ReleaseProcessingStatus).map(
@@ -290,14 +287,8 @@ app.get('/releases', (c) => {
             </label>
           </form>
 
-          <div style="flex-grow: 1"></div>
-
-          <!-- actions -->
-          <form method="POST" action="/releases/reparse">
-            <button class="outline hidden">re-parse</button>
-          </form>
-
-          <div>
+          ${showPagination &&
+          html`<div>
             <a
               role="button"
               class="outline contrast"
@@ -313,7 +304,7 @@ app.get('/releases', (c) => {
             >
               ⫸
             </a>
-          </div>
+          </div>`}
         </div>
 
         <table>
@@ -440,6 +431,21 @@ app.get('/releases/:key', (c) => {
     return c.json(row)
   }
 
+  function searchLink(val?: string) {
+    if (!val) return
+    const u = new URL('/releases', c.req.url)
+    u.searchParams.set('search', `"${val}"`)
+    return html`<a class="plain contrast" href="${u.toString()}"> ${val} </a>`
+  }
+
+  function infoRowLink(key: string, val: string) {
+    if (!val) return
+    return html` <tr>
+      <td class="key">${key}</td>
+      <td>${searchLink(val)}</td>
+    </tr>`
+  }
+
   const parsedRelease = row._parsed!
   const clears = isClearedRepo.listForRelease(releaseId)
 
@@ -447,7 +453,7 @@ app.get('/releases/:key', (c) => {
 
   const mapArtist = (section: string) => (c: DDEXContributor) =>
     html`<tr>
-      <td>${c.name}</td>
+      <td>${searchLink(c.name)}</td>
       <td>${c.role}</td>
       <td>${section}</td>
     </tr>`
@@ -456,27 +462,24 @@ app.get('/releases/:key', (c) => {
     Layout(
       html`
         <div style="display: flex; gap: 20px">
-          <div style="text-align: center">
+          <div>
             <img
               src="/release/${row.source}/${row.key}/${parsedRelease.images[0]
                 ?.ref}/200"
               style="width: 200px; height: 200px; display: block; margin-bottom: 10px"
             />
+
             <mark>${parsedRelease.parentalWarningType}</mark>
           </div>
 
           <div style="flex-grow: 1">
             <h3 style="margin-bottom: 0">${parsedRelease.title}</h3>
-            <h5>
+            <h6>
               ${parsedRelease.artists
                 .slice(0, 1)
-                .map(
-                  (a) =>
-                    html`<em style="margin-right: 5px" data-tooltip="${a.role}"
-                      >${a.name}</em
-                    >`
-                )}
-            </h5>
+                .map((a) => searchLink(a.name))}
+            </h6>
+
             ${parsedRelease.soundRecordings.map(
               (sr) => html`
                 <article style="display: flex; gap: 20px">
@@ -520,9 +523,21 @@ app.get('/releases/:key', (c) => {
           <hr />
 
           <div>
-            ${debugLinks(row.xmlUrl, row.key)}
+            <div style="padding: 4px">
+              ${debugLinks(row.xmlUrl, row.key)}
+              <hr />
+              ${row.status}<br />
+              ${row._parsed?.problems?.map((p) => html`<small>${p} </small>`)}
+              <hr />
+            </div>
 
-            <hr />
+            <table style="width: 100%; font-size: 90%;" class="compact">
+              ${infoRowLink('Source', row.source)}
+              ${infoRowLink('Label', parsedRelease.labelName)}
+              ${infoRowLink('Genre', parsedRelease.genre)}
+              ${infoRowLink('SubGenre', parsedRelease.subGenre)}
+              ${infoRowLink('Release', parsedRelease.releaseDate)}
+            </table>
 
             ${row.entityType == 'track' &&
             html` <a href="${API_HOST}/v1/full/tracks/${row.entityId}">
@@ -532,11 +547,10 @@ app.get('/releases/:key', (c) => {
             html` <a href="${API_HOST}/v1/full/playlists/${row.entityId}">
               Album: ${row.entityId}
             </a>`}
-
-            <hr />
-
             ${!IS_PROD &&
             html`
+              <hr />
+
               <details>
                 <summary>Test Publish</summary>
                 <form action="/publish/${releaseId}">
@@ -805,15 +819,29 @@ function audiusUserLink(id: string) {
 
 function debugLinks(xmlUrl: string, releaseId?: string) {
   return html`
-    <a href="/xmls/${encodeURIComponent(xmlUrl)}" target="_blank">xml</a>
+    <a
+      class="plain secondary"
+      href="/xmls/${encodeURIComponent(xmlUrl)}"
+      target="_blank"
+      >xml</a
+    >
 
-    <a href="/xmls/${encodeURIComponent(xmlUrl)}?parse=true" target="_blank">
+    <a
+      class="plain secondary"
+      href="/xmls/${encodeURIComponent(xmlUrl)}?parse=true"
+      target="_blank"
+    >
       parsed
     </a>
 
-    <a href="/xmls/${encodeURIComponent(xmlUrl)}?parse=sdk">sdk</a>
+    <a
+      class="plain secondary"
+      href="/xmls/${encodeURIComponent(xmlUrl)}?parse=sdk"
+      >sdk</a
+    >
 
-    ${releaseId && html`<a href="/history/${releaseId}">history</a>`}
+    ${releaseId &&
+    html`<a class="plain secondary" href="/history/${releaseId}">history</a>`}
   `
 }
 
@@ -869,6 +897,15 @@ function Layout(
           }
           a.plain {
             text-decoration: none;
+          }
+
+          table.compact td {
+            padding: 8px;
+            font-size: 95%;
+          }
+          table.compact td.key {
+            text-transform: uppercase;
+            font-size: 80%;
           }
         </style>
       </head>

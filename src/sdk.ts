@@ -5,8 +5,12 @@ import { SourceConfig } from './sources'
 const sdkCache: Record<string, AudiusSdkType> = {}
 
 export function getSdk(sourceConfig: SourceConfig) {
-  const { ddexKey, ddexSecret, name, env } = sourceConfig
+  let { ddexKey, ddexSecret, name, env } = sourceConfig
   if (!sdkCache[ddexKey]) {
+    // viem expects hex values to start with 0x
+    if (!ddexSecret.startsWith('0x')) {
+      ddexSecret = '0x' + ddexSecret
+    }
     sdkCache[ddexKey] = sdk({
       apiKey: ddexKey,
       apiSecret: ddexSecret,

@@ -229,7 +229,7 @@ export function prepareTrackMetadatas(
 
       for (const deal of release.deals) {
         if (deal.audiusDealType == 'FollowGated') {
-          const cond = { followUserId: release.audiusUser! }
+          const cond = { followUserId: decodeId(release.audiusUser!) }
           if (deal.forStream) {
             meta.isStreamGated = true
             meta.streamConditions = cond
@@ -242,7 +242,7 @@ export function prepareTrackMetadatas(
         }
 
         if (deal.audiusDealType == 'TipGated') {
-          const cond = { tipUserId: release.audiusUser! }
+          const cond = { tipUserId: decodeId(release.audiusUser!) }
           if (deal.forStream) {
             meta.isStreamGated = true
             meta.streamConditions = cond

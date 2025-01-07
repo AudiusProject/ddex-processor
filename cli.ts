@@ -260,17 +260,17 @@ program
         throw new Error(`failed to find track record for: ${sdkTrack.title}`)
       }
 
-      console.log('update track', sdkTrack.id, sdkTrack.title, trackUpdate)
+      // this is needed if generatePreview is true
+      trackUpdate.trackCid = sdkTrack.track_cid
 
-      // this is needed if transcodePreview is true
-      // latest.audioUploadId = apiTrack.audio_upload_id
+      console.log('update track', sdkTrack.id, sdkTrack.title, trackUpdate)
 
       try {
         await sdk.tracks.updateTrack({
           trackId: sdkTrack.id,
           userId: sdkTrack.user.id,
           metadata: trackUpdate,
-          // transcodePreview: false,
+          generatePreview: true,
         })
       } catch (e) {
         console.log('track update failed', sdkTrack.id, sdkTrack.title, e)

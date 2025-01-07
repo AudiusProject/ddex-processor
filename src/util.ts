@@ -9,7 +9,7 @@ export function encodeId(id: number | string) {
 }
 
 export function decodeId(id: string) {
-  return hasher.decode(id)[0]
+  return hasher.decode(id)[0] as number
 }
 
 export async function sleep(ms: number) {

@@ -388,6 +388,15 @@ export const releaseRepo = {
         return
       }
 
+      if (!release.audiusUser) {
+        release.problems.push(`NoUser`)
+      } else {
+        const idx = release.problems.indexOf(`NoUser`)
+        if (idx != -1) {
+          release.problems.splice(idx, 1)
+        }
+      }
+
       // if same xmlUrl + json, skip
       // may want some smarter json compare here
       // if this is causing spurious sdk updates to be issued

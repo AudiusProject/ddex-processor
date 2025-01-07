@@ -81,6 +81,7 @@ export type DDEXResource = {
 export type DDEXSoundRecording = {
   isrc?: string
   title: string
+  subTitle: string
   releaseDate: string
   genre: string
   subGenre: string
@@ -433,6 +434,7 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
       filePath: $el.find('FilePath:first').text(),
       fileName: $el.find('FileName:first').text(),
       title: $el.find('TitleText:first').text(),
+      subTitle: $el.find('SubTitle:first').text(),
       artists: parseContributor('DisplayArtist', $el),
       contributors: parseContributor('ResourceContributor', $el),
       indirectContributors: parseContributor(
@@ -552,9 +554,6 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
       const sourceConfig = sources.findByName(source)
       if (sourceConfig) {
         release.audiusUser = userRepo.match(sourceConfig.ddexKey, artistNames)
-      }
-      if (!release.audiusUser) {
-        release.problems.push(`NoUser`)
       }
 
       // resolve resources

@@ -203,9 +203,11 @@ export function prepareTrackMetadatas(
       const parentalWarningType =
         sound.parentalWarningType || release.parentalWarningType
 
+      const title = [sound.title, sound.subTitle].filter(Boolean).join(' ')
+
       const meta: UploadTrackRequest['metadata'] = {
         genre: audiusGenre,
-        title: sound.title,
+        title,
         isrc: release.releaseIds.isrc,
         iswc: release.releaseIds.iswc,
         ddexReleaseIds: release.releaseIds,
@@ -369,9 +371,10 @@ export function prepareAlbumMetadata(
   if (release.releaseDate) {
     releaseDate = new Date(release.releaseDate)
   }
+  const title = [release.title, release.subTitle].filter(Boolean).join(' ')
   const meta: UploadAlbumRequest['metadata'] = {
     genre: release.audiusGenre || Genre.ALL,
-    albumName: release.title,
+    albumName: title,
     releaseDate,
     ddexReleaseIds: release.releaseIds,
     ddexApp: Web3.utils.toChecksumAddress(source.ddexKey),
@@ -388,7 +391,12 @@ export function prepareAlbumMetadata(
         source.labelUserIds[release.labelName] ||
         source.payoutUserId ||
         release.audiusUser!
-      const priceUsd = deal.priceUsd || DEFAULT_ALBUM_PRICE
+
+      const defaultPrice = Math.min(
+        DEFAULT_ALBUM_PRICE,
+        release.soundRecordings.length
+      )
+      const priceUsd = deal.priceUsd || defaultPrice
 
       const cond = {
         usdcPurchase: {

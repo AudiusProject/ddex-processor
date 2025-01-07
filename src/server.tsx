@@ -413,7 +413,7 @@ ${row._parsed?.soundRecordings.length} tracks"
           </tbody>
         </table>
       `,
-      'Releases'
+      querySearch || 'Releases'
     )
   )
 })
@@ -473,7 +473,9 @@ app.get('/releases/:key', (c) => {
           </div>
 
           <div style="flex-grow: 1">
-            <h3 style="margin-bottom: 0">${parsedRelease.title}</h3>
+            <h3 style="margin-bottom: 0">
+              ${parsedRelease.title} ${parsedRelease.subTitle}
+            </h3>
             <h6>
               ${parsedRelease.artists
                 .slice(0, 1)
@@ -501,7 +503,7 @@ app.get('/releases/:key', (c) => {
                           <mark class="not-cleared">Not Cleared</mark>
                         )}
                       </div>
-                      <h4>${sr.title}</h4>
+                      <h4>${sr.title} ${sr.subTitle}</h4>
                     </div>
 
                     <table style="display: block; font-size: 90%;">

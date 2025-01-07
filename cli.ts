@@ -252,7 +252,9 @@ program
     )
 
     for (const sdkTrack of sdkAlbum.data![0].tracks) {
-      const trackUpdate = trackUpdates.find((s) => s.title == sdkTrack.title)
+      let trackUpdate = trackUpdates.find(
+        (s) => sdkTrack.isrc && s.isrc == sdkTrack.isrc
+      )
       if (!trackUpdate) {
         throw new Error(`failed to find track record for: ${sdkTrack.title}`)
       }

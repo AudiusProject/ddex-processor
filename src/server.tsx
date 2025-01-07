@@ -451,6 +451,10 @@ app.get('/releases/:key', (c) => {
 
   const allUsers = userRepo.all()
 
+  const associatedUser = parsedRelease.audiusUser
+    ? allUsers.find((u) => u.id == parsedRelease.audiusUser)
+    : undefined
+
   const mapArtist = (section: string) => (c: DDEXContributor) =>
     html`<tr>
       <td>${searchLink(c.name)}</td>
@@ -549,6 +553,42 @@ app.get('/releases/:key', (c) => {
             html` <a href="${API_HOST}/v1/full/playlists/${row.entityId}">
               Album: ${row.entityId}
             </a>`}
+
+            <article>
+              <header>Audius User</header>
+
+              ${associatedUser && (
+                <div>
+                  <b>{associatedUser.handle}</b>
+                  <br />
+                  {row.prependArtist && <mark>Label Account</mark>}
+                </div>
+              )}
+
+              <details style="margin-top: 20px">
+                <summary>Edit</summary>
+                <form action="/associate/${releaseId}">
+                  <fieldset>
+                    <select name="userId" required>
+                      <option value="">Select User</option>
+                      ${allUsers.map(
+                        (u) => html`<option value="${u.id}">${u.name}</option>`
+                      )}
+                    </select>
+
+                    <label
+                      title="Checking label account will prepend artist to track title."
+                    >
+                      <input type="checkbox" name="prependArtist" />
+                      Label Account
+                    </label>
+
+                    <button>Associate</button>
+                  </fieldset>
+                </form>
+              </details>
+            </article>
+
             ${!IS_PROD &&
             html`
               <hr />
@@ -562,7 +602,7 @@ app.get('/releases/:key', (c) => {
                       (u) => html`<option value="${u.id}">${u.name}</option>`
                     )}
                   </select>
-                  <button>publish</button>
+                  <button>Publish</button>
                 </form>
               </details>
             `}
@@ -681,9 +721,9 @@ app.get('/xmls/:xmlUrl', (c) => {
     // parse=sdk will convert internal representation to SDK friendly format
     if (c.req.query('parse') == 'sdk') {
       const sdkReleases = parsed.map((release) => {
-        const tracks = prepareTrackMetadatas(source, release)
+        const tracks = prepareTrackMetadatas(source, {} as any, release)
         if (tracks.length > 1) {
-          const album = prepareAlbumMetadata(source, release)
+          const album = prepareAlbumMetadata(source, {} as any, release)
           return {
             ref: release.ref,
             album,
@@ -752,6 +792,29 @@ app.get('/users', (c) => {
         </table> `
     )
   )
+})
+
+app.get('/associate/:releaseId', async (c) => {
+  const releaseId = c.req.param('releaseId')
+  const releaseRow = releaseRepo.get(releaseId)
+  const release = releaseRow?._parsed
+  const user = userRepo.findOne({ id: c.req.query('userId') })
+  const source = sources.findByName(releaseRow?.source || '')
+  if (!releaseRow || !user || !source || !release) {
+    return c.text('not found', 404)
+  }
+
+  release.audiusUser = user.id
+
+  releaseRepo.upsert(
+    releaseRow.source,
+    releaseRow.xmlUrl,
+    releaseRow.messageTimestamp,
+    release
+  )
+
+  releaseRepo.markPrependArtist(releaseId, c.req.query('prependArtist') == 'on')
+  return c.redirect(`/releases/${releaseId}`)
 })
 
 app.get('/publish/:releaseId', async (c) => {

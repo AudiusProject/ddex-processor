@@ -98,7 +98,8 @@ create table if not exists s3markers (
   sql`alter table releases add column numNotCleared int`,
   sql`delete from releases where releaseType = 'TrackRelease'`,
   sql`create index releaseDateIdx on releases(releaseDate)`,
-  sql`create index messageTimestampIdx on releases(messageTimestamp)`
+  sql`create index messageTimestampIdx on releases(messageTimestamp)`,
+  sql`alter table releases add column prependArtist boolean`
 )
 
 export type XmlRow = {
@@ -138,6 +139,7 @@ export type ReleaseRow = {
   createdAt: string
   numCleared: number
   numNotCleared: number
+  prependArtist: string
 
   entityType?: 'track' | 'album'
   entityId?: string
@@ -375,7 +377,6 @@ export const releaseRepo = {
     ) => {
       const key = releaseRepo.chooseReleaseId(release.releaseIds)
       const prior = releaseRepo.get(key)
-      const json = JSON.stringify(release)
 
       // skip TrackRelease, since we only want main releases
       if (release.releaseType == 'TrackRelease') {
@@ -396,6 +397,8 @@ export const releaseRepo = {
           release.problems.splice(idx, 1)
         }
       }
+
+      const json = JSON.stringify(release)
 
       // if same xmlUrl + json, skip
       // may want some smarter json compare here
@@ -443,6 +446,14 @@ export const releaseRepo = {
       } as Partial<ReleaseRow>)
     }
   ),
+
+  markPrependArtist(key: string, prependArtist: boolean) {
+    db.run(sql`
+      update releases set
+      prependArtist=${prependArtist ? 'TRUE' : ''}
+      where key = ${key}
+    `)
+  },
 
   markForDelete: db.transaction(
     (

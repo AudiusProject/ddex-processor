@@ -85,7 +85,7 @@ export async function publishRelease(
     release.soundRecordings.map((track) => resolveFile(track))
   )
 
-  const trackMetadatas = prepareTrackMetadatas(source, release)
+  const trackMetadatas = prepareTrackMetadatas(source, releaseRow, release)
 
   if (source.placementHosts) {
     for (const t of trackMetadatas) {
@@ -96,9 +96,9 @@ export async function publishRelease(
   // publish album
   if (release.soundRecordings.length > 1) {
     const uploadAlbumRequest: UploadAlbumRequest = {
-      coverArtFile: imageFile,
-      metadata: prepareAlbumMetadata(source, release),
-      trackFiles,
+      coverArtFile: imageFile as any,
+      metadata: prepareAlbumMetadata(source, releaseRow, release),
+      trackFiles: trackFiles as any,
       trackMetadatas,
       userId: release.audiusUser!,
     }
@@ -134,8 +134,8 @@ export async function publishRelease(
     const uploadTrackRequest: UploadTrackRequest = {
       userId: release.audiusUser!,
       metadata,
-      coverArtFile: imageFile,
-      trackFile,
+      coverArtFile: imageFile as any,
+      trackFile: trackFile as any,
     }
 
     if (skipSdkPublish) {
@@ -165,7 +165,7 @@ export async function updateTrack(
   release: DDEXRelease
 ) {
   const sdk = getSdk(source)
-  const metas = prepareTrackMetadatas(source, release)
+  const metas = prepareTrackMetadatas(source, row, release)
 
   const result = await sdk.tracks.updateTrack({
     userId: release.audiusUser!,
@@ -185,6 +185,7 @@ export async function updateTrack(
 
 export function prepareTrackMetadatas(
   source: SourceConfig,
+  releaseRow: ReleaseRow,
   release: DDEXRelease
 ) {
   const trackMetas: UploadTrackRequest['metadata'][] =
@@ -203,7 +204,10 @@ export function prepareTrackMetadatas(
       const parentalWarningType =
         sound.parentalWarningType || release.parentalWarningType
 
-      const title = [sound.title, sound.subTitle].filter(Boolean).join(' ')
+      let title = [sound.title, sound.subTitle].filter(Boolean).join(' ')
+      if (releaseRow.prependArtist) {
+        title = release.artists[0].name + ' - ' + title
+      }
 
       const meta: UploadTrackRequest['metadata'] = {
         genre: audiusGenre,
@@ -305,7 +309,7 @@ export async function updateAlbum(
   row: ReleaseRow,
   release: DDEXRelease
 ) {
-  const meta = prepareAlbumMetadata(source, release)
+  const meta = prepareAlbumMetadata(source, row, release)
   const sdk = getSdk(source)
 
   const result = await sdk.albums.updateAlbum({
@@ -365,13 +369,17 @@ export async function deleteRelease(source: SourceConfig, r: ReleaseRow) {
 
 export function prepareAlbumMetadata(
   source: SourceConfig,
+  releaseRow: ReleaseRow,
   release: DDEXRelease
 ) {
   let releaseDate: Date | undefined
   if (release.releaseDate) {
     releaseDate = new Date(release.releaseDate)
   }
-  const title = [release.title, release.subTitle].filter(Boolean).join(' ')
+  let title = [release.title, release.subTitle].filter(Boolean).join(' ')
+  if (releaseRow.prependArtist) {
+    title = release.artists[0].name + ' - ' + title
+  }
   const meta: UploadAlbumRequest['metadata'] = {
     genre: release.audiusGenre || Genre.ALL,
     albumName: title,

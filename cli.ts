@@ -248,6 +248,7 @@ program
 
     const trackUpdates = prepareTrackMetadatas(
       sourceConfig,
+      releaseRow,
       releaseRow._parsed!
     )
 

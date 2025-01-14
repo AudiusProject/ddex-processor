@@ -8,8 +8,8 @@ import {
   prepareTrackMetadatas,
   publishValidPendingReleases,
 } from './src/publishRelease'
-import { clmReport } from './src/reporting'
-import { pollForNewLSRFiles } from './src/reporting_lsr'
+import { clmReport } from './src/reporting/clm_report'
+import { pollForNewLSRFiles } from './src/reporting/lsr_reader'
 import { pollS3 } from './src/s3poller'
 import { sync } from './src/s3sync'
 import { getSdk } from './src/sdk'

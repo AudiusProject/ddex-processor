@@ -32,6 +32,8 @@ import {
   updateAlbum,
   updateTrack,
 } from './publishRelease'
+import { formatDateToYYYYMMDD, getPriorMonth } from './reporting/date_utils'
+import { generateSalesReport } from './reporting/sales_report'
 import { readAssetWithCaching } from './s3poller'
 import { sources } from './sources'
 import { parseBool } from './util'
@@ -844,6 +846,64 @@ app.get('/publish/:releaseId', async (c) => {
   return c.redirect(`/releases/${releaseId}`)
 })
 
+app.get('/report', (c) => {
+  const [start, end] = getPriorMonth()
+  return c.html(
+    Layout(
+      html`
+        <h2>Sales Report</h2>
+        <form method="POST">
+          <fieldset class="grid">
+            <label>
+              Source
+              <select name="sourceName" required>
+                <option selected disabled value="">Source</option>
+                ${sources.all().map((s) => html`<option>${s.name}</option>`)}
+              </select>
+            </label>
+
+            <label>
+              Start Date
+              <input
+                type="date"
+                name="start"
+                required
+                value="${formatDateToYYYYMMDD(start)}"
+              />
+            </label>
+
+            <label>
+              End Date
+              <input
+                type="date"
+                name="end"
+                required
+                value="${formatDateToYYYYMMDD(end)}"
+              />
+            </label>
+          </fieldset>
+          <button>Generate</button>
+        </form>
+      `,
+      'Sales Report'
+    )
+  )
+})
+
+app.post('/report', async (c) => {
+  const body = await c.req.formData()
+  const sourceName = body.get('sourceName')?.toString()
+  const start = body.get('start')?.toString()
+  const end = body.get('end')?.toString()
+  if (!sourceName || !start || !end) {
+    return c.text('missing required form value', 400)
+  }
+  const [fileName, result] = await generateSalesReport(sourceName, start, end)
+  return c.body(result, 200, {
+    'Content-Disposition': `attachment; filename="${fileName}"`,
+  })
+})
+
 export type JwtUser = {
   userId: string
   email: string
@@ -980,6 +1040,7 @@ function Layout(
           <a href="/releases">releases</a>
           <a href="/users">users</a>
           <a href="/stats" target="_blank">stats</a>
+          <a href="/report">report</a>
         </div>
         <div style="padding: 50px;">${inner}</div>
       </body>

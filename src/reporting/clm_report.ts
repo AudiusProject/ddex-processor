@@ -3,9 +3,9 @@ import sql from '@radically-straightforward/sqlite'
 import { stringify } from 'csv-stringify/sync'
 import { mkdir, writeFile } from 'fs/promises'
 import path from 'path'
-import { releaseRepo, s3markerRepo } from './db'
-import { dialS3 } from './s3poller'
-import { sources } from './sources'
+import { releaseRepo, s3markerRepo } from '../db'
+import { dialS3 } from '../s3poller'
+import { sources } from '../sources'
 
 export async function clmReport() {
   const markerKey = 'report_clm'

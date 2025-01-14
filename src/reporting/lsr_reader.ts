@@ -2,9 +2,9 @@ import { GetObjectCommand, ListObjectsCommand } from '@aws-sdk/client-s3'
 import { parse } from 'csv-parse/sync'
 import { readdir, readFile } from 'fs/promises'
 import { gunzip } from 'zlib'
-import { isClearedRepo } from './db'
-import { dialS3 } from './s3poller'
-import { sources } from './sources'
+import { isClearedRepo } from '../db'
+import { dialS3 } from '../s3poller'
+import { sources } from '../sources'
 
 sources.load()
 

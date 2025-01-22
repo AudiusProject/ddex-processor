@@ -6,3 +6,4 @@ node_modules
 backups
 reports
 .DS_Store
+local-storage

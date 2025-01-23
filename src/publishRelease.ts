@@ -53,7 +53,8 @@ export async function publishValidPendingReleases() {
 export async function publishRelease(
   source: SourceConfig,
   releaseRow: ReleaseRow,
-  release: DDEXRelease
+  release: DDEXRelease,
+  userSdk?: ReturnType<typeof getSdk>
 ) {
   if (new Date(release.releaseDate) > new Date()) {
     console.log(
@@ -68,7 +69,7 @@ export async function publishRelease(
     throw new Error(`xmlUrl is required to resolve file paths`)
   }
 
-  const sdk = getSdk(source)
+  const sdk = userSdk || getSdk(source)
 
   // read asset file
   async function resolveFile({ ref }: DDEXResource) {

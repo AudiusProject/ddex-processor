@@ -19,6 +19,11 @@ async function main() {
   const artistName = release.artists[0].name
   const baseHandle = artistName.replace(/[^a-zA-Z0-9]/g, '')
 
+  const source = sources.findByName(releaseRow.source)
+  if (!source) {
+    throw new Error(`missing source: ${releaseRow.source}`)
+  }
+
   // read asset file
   async function resolveFile({ ref }: DDEXResource) {
     const asset = assetRepo.get(releaseRow!.source, releaseRow!.key, ref)
@@ -29,6 +34,8 @@ async function main() {
   }
 
   const imageFile = await resolveFile(release.images[0])
+
+  // TODO: attempt to find existing claimable artist if publishing a second release from an artist
 
   // use attempt to handle situations where email / handle is taken.
   for (let attempt = 0; attempt < 20; attempt++) {
@@ -79,9 +86,13 @@ async function main() {
       console.log('updateImageResult', updateImageResult)
 
       // TODO: save user details to db
-      // TODO: try to authorize source?
 
-      const source = sources.findByName(releaseRow.source)
+      // authorize source ddex app
+      const grantResult = await userSdk.grants.createGrant({
+        userId: encodedUserId,
+        appApiKey: source?.ddexKey,
+      })
+      console.log('grantResult', grantResult)
 
       // save release with associated audius user
       release.audiusUser = encodedUserId
@@ -92,7 +103,7 @@ async function main() {
         release
       )
 
-      await publishRelease(source!, releaseRow, release, userSdk)
+      await publishRelease(source!, releaseRow, release)
 
       break
     } catch (e) {

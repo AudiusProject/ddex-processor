@@ -772,6 +772,7 @@ app.get('/users', (c) => {
               <th>handle</th>
               <th>name</th>
               <th>api key</th>
+              <th>password</th>
               <th>created</th>
             </tr>
           </thead>
@@ -787,6 +788,7 @@ app.get('/users', (c) => {
                       >${sources.findByApiKey(user.apiKey)?.name}</b
                     >
                   </td>
+                  <td>${user.password}</td>
                   <td>${user.createdAt}</td>
                 </tr>`
             )}

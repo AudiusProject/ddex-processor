@@ -1,4 +1,5 @@
 import { createHedgehogWalletClient, sdk } from '@audius/sdk'
+import { randomBytes } from 'crypto'
 import { assetRepo, releaseRepo, userRepo } from '../db'
 import { DDEXResource } from '../parseDelivery'
 import { publishRelease } from '../publishRelease'
@@ -21,7 +22,7 @@ export async function publishToClaimableAccount(releaseId: string) {
     throw new Error(`missing source: ${releaseRow.source}`)
   }
 
-  // read asset file
+  // read image asset file
   async function resolveFile({ ref }: DDEXResource) {
     const asset = assetRepo.get(releaseRow!.source, releaseRow!.key, ref)
     if (!asset) {
@@ -39,13 +40,14 @@ export async function publishToClaimableAccount(releaseId: string) {
       handle += `_${attempt}`
     }
     const email = `steve+${handle}@audius.co`
-    const password = 'password123'
+    const password = randomBytes(16).toString('hex')
 
     try {
       // attempt to find existing user record
       // if not found, create a claimable account
       let encodedUserId = userRepo.match(source.ddexKey, [artistName])
       if (!encodedUserId) {
+        // no user: create claimable user
         console.log(`=== creating claimable account for ${artistName}`)
         const hedgehog = getHedgehog()
         const identityResult = await hedgehog.signUp({
@@ -118,6 +120,4 @@ export async function publishToClaimableAccount(releaseId: string) {
       console.log('attempt', attempt, e)
     }
   }
-
-  process.exit(0)
 }

@@ -100,7 +100,10 @@ create table if not exists s3markers (
   sql`create index releaseDateIdx on releases(releaseDate)`,
   sql`create index messageTimestampIdx on releases(messageTimestamp)`,
   sql`alter table releases add column prependArtist boolean`,
-  sql`alter table users add column password text`
+  sql`alter table users add column password text`,
+
+  sql`create index sourceIdx on releases(source)`,
+  sql`create index numClearedIdx on releases(numCleared)`
 )
 
 export type XmlRow = {

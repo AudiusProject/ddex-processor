@@ -10,6 +10,7 @@ import { decode } from 'hono/jwt'
 import { logger } from 'hono/logger'
 import { prettyJSON } from 'hono/pretty-json'
 import { HtmlEscapedString } from 'hono/utils/html'
+import { publishToClaimableAccount } from './claimable/createUserPublish'
 import {
   ReleaseProcessingStatus,
   assetRepo,
@@ -25,13 +26,7 @@ import {
   parseDdexXml,
   reParsePastXml,
 } from './parseDelivery'
-import {
-  prepareAlbumMetadata,
-  prepareTrackMetadatas,
-  publishRelease,
-  updateAlbum,
-  updateTrack,
-} from './publishRelease'
+import { prepareAlbumMetadata, prepareTrackMetadatas } from './publishRelease'
 import { formatDateToYYYYMMDD, getPriorMonth } from './reporting/date_utils'
 import { generateSalesReport } from './reporting/sales_report'
 import { readAssetWithCaching } from './s3poller'
@@ -548,13 +543,19 @@ app.get('/releases/:key', (c) => {
             </table>
 
             ${row.entityType == 'track' &&
-            html` <a href="${API_HOST}/v1/full/tracks/${row.entityId}">
-              Track: ${row.entityId}
-            </a>`}
+            html` <article>
+              <header>Audius Track</header>
+              <a href="${API_HOST}/v1/full/tracks/${row.entityId}">
+                ${row.entityId}
+              </a>
+            </article>`}
             ${row.entityType == 'album' &&
-            html` <a href="${API_HOST}/v1/full/playlists/${row.entityId}">
-              Album: ${row.entityId}
-            </a>`}
+            html` <article>
+              <header>Audius Album</header>
+              <a href="${API_HOST}/v1/full/playlists/${row.entityId}">
+                ${row.entityId}
+              </a>
+            </article>`}
 
             <article>
               <header>Audius User</header>
@@ -591,23 +592,26 @@ app.get('/releases/:key', (c) => {
               </details>
             </article>
 
-            ${!IS_PROD &&
-            html`
-              <hr />
+            <hr />
 
-              <details>
-                <summary>Test Publish</summary>
-                <form action="/publish/${releaseId}">
-                  <select name="userId" required>
-                    <option value="">Select User</option>
-                    ${allUsers.map(
-                      (u) => html`<option value="${u.id}">${u.name}</option>`
-                    )}
-                  </select>
-                  <button>Publish</button>
-                </form>
-              </details>
-            `}
+            <details>
+              <summary>Publish</summary>
+              <mark>Warning!</mark>
+              <ul>
+                <li>
+                  This will publish this release. Please verify release date +
+                  cleared status.
+                </li>
+                ${!associatedUser &&
+                html`<li>
+                  This will create a claimable Audius account if no artist is
+                  associated
+                </li>`}
+              </ul>
+              <form action="/publish/${releaseId}" method="POST">
+                <button>Publish</button>
+              </form>
+            </details>
           </div>
         </div>
         <script>
@@ -821,31 +825,34 @@ app.get('/associate/:releaseId', async (c) => {
   return c.redirect(`/releases/${releaseId}`)
 })
 
-app.get('/publish/:releaseId', async (c) => {
-  if (IS_PROD) {
-    return c.text(`publish release is disabled in prod`, 400)
-  }
-
+app.post('/publish/:releaseId', async (c) => {
   const releaseId = c.req.param('releaseId')
   const releaseRow = releaseRepo.get(releaseId)
   const release = releaseRow?._parsed
-  const user = userRepo.findOne({ id: c.req.query('userId') })
   const source = sources.findByName(releaseRow?.source || '')
-  if (!releaseRow || !user || !source || !release) {
+  if (!releaseRow || !source || !release) {
     return c.text('not found', 404)
   }
-  release.audiusUser = user.id
-  if (releaseRow.entityId) {
-    // update
-    if (releaseRow.entityType == 'track') {
-      await updateTrack(source, releaseRow, release)
-    } else if (releaseRow.entityType == 'album') {
-      await updateAlbum(source, releaseRow, release)
-    }
-  } else {
-    await publishRelease(source, releaseRow, release)
-  }
-  return c.redirect(`/releases/${releaseId}`)
+
+  // can exceed 60s request timeout, so fire and forget
+  publishToClaimableAccount(releaseId)
+  return c.html(
+    Layout(html`
+      <h2>Publishing ${release.title}</h2>
+      <ul>
+        <li>Publishing can take a minute or two.</li>
+        <li>When complete the release will Published status.</li>
+        <li>
+          You can return to the release page and refresh to check the status.
+        </li>
+      </ul>
+      <p>
+        <a href=${`/releases/${releaseId}`}>Back to release</a>
+      </p>
+    `)
+  )
+
+  // return c.redirect(`/releases/${releaseId}`)
 })
 
 app.get('/report', (c) => {

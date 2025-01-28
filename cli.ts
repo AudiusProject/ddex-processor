@@ -1,6 +1,7 @@
 import 'dotenv/config'
 
 import { program } from 'commander'
+import { publishToClaimableAccount } from './src/claimable/createUserPublish'
 import { cleanupFiles } from './src/cleanupFiles'
 import { releaseRepo, userRepo } from './src/db'
 import { parseDelivery, reParsePastXml } from './src/parseDelivery'
@@ -99,6 +100,14 @@ program
 
     await publishValidPendingReleases()
     process.exit(0) // sdk client doesn't know when to quit
+  })
+
+program
+  .command('publish-to-claimable-account')
+  .description('Publish a single release to a user, create user if not exists')
+  .argument('<releaseId>', 'release ID')
+  .action(async (releaseId) => {
+    await publishToClaimableAccount(releaseId)
   })
 
 program

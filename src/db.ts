@@ -99,7 +99,11 @@ create table if not exists s3markers (
   sql`delete from releases where releaseType = 'TrackRelease'`,
   sql`create index releaseDateIdx on releases(releaseDate)`,
   sql`create index messageTimestampIdx on releases(messageTimestamp)`,
-  sql`alter table releases add column prependArtist boolean`
+  sql`alter table releases add column prependArtist boolean`,
+  sql`alter table users add column password text`,
+
+  sql`create index sourceIdx on releases(source)`,
+  sql`create index numClearedIdx on releases(numCleared)`
 )
 
 export type XmlRow = {
@@ -116,6 +120,7 @@ export type UserRow = {
   handle: string
   name: string
   createdAt: string
+  password?: string
 }
 
 export enum ReleaseProcessingStatus {

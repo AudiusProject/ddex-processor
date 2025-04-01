@@ -8,4 +8,4 @@ reports
 .DS_Store
 local-storage
 
-data/*
+src/reporting/data/*

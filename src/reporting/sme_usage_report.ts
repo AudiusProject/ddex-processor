@@ -11,10 +11,12 @@ export async function generateSalesReport(
   start: string,
   end: string
 ) {
-  const rows = await sql`
+  const startFormatted = start.replace(/-/g, '')
+  const endFormatted = end.replace(/-/g, '')
 
+  const standardReportRows = await sql`
   with
-  ddex_sales as (
+  sales as (
     select
       t.copyright_line->>'text' as "Label",
       a.playlist_name as "Album Title",
@@ -26,9 +28,9 @@ export async function generateSalesReport(
       t.isrc as "ISRC",
       country_to_iso_alpha2(coalesce(s.country, 'United States')) as "Country of sale",
       (
-          SELECT (split->>'amount')::NUMERIC
-          FROM jsonb_array_elements(splits) AS split
-          WHERE split->>'user_id' is not null
+          select (split->>'amount')::NUMERIC
+          from jsonb_array_elements(splits) AS split
+          where split->>'user_id' is not null
       ) as split_amount,
       s.amount,
       s.extra_amount,
@@ -38,16 +40,16 @@ export async function generateSalesReport(
     join playlist_tracks pt using (track_id)
     join playlists a on pt.playlist_id = a.playlist_id AND a.is_album = TRUE
     join users u on t.owner_id = u.user_id
-    WHERE s.created_at >= ${start}
-      AND s.created_at < ${end}
+    where s.created_at >= ${start}
+      and s.created_at < ${end}
   )
 
   select
     'N' as "Record Type",
     'QJ76' as "Provider Key",
     '2222' as "Client Key",
-    ${start.replace(/-/g, '')} as "Report Start Date",
-    ${end.replace(/-/g, '')} as "Report End Date",
+    ${startFormatted} as "Report Start Date",
+    ${endFormatted} as "Report End Date",
     'Audius - DTO Products Service' as "Vendor Key Name",
     'P0A1' as "Vendor Key",
     "Country of sale" as "Country Key",
@@ -78,30 +80,74 @@ export async function generateSalesReport(
     "Artist" as "Participant Full Name (Main artist for the album)",
     "Album Title" as "Product Title",
     "Track Title" as "Track Title",
-    1 as "Track Count",
-    "Track Length" as "Track Length",
-    "Track Length" as "Total Stream Duration",
-    'A001' as "Campaign ID",
-    '3rd Party Provider' as "Misc."
-  from ddex_sales
+    '' as "Track Count",
+    TO_CHAR(("Track Length" || ' seconds')::interval, 'HH24:MI:SS') as "Track Length",
+    TO_CHAR(("Track Length" || ' seconds')::interval, 'HH24:MI:SS') as "Total Stream Duration",
+    '' as "Campaign ID",
+    '' as "Misc."
+  from sales
   group by "Track ID", "UPC", "ISRC", "Label", "Artist", "Album Title", "Track Title", "Track Length", "Country of sale"
 ;
 
   `.values()
 
+  const marketShareReportRows = await sql`
+  with
+  sales as (
+    select
+      country_to_iso_alpha2(coalesce(s.country, 'United States')) as country_of_sale,
+      count(*) as total_sales
+    from usdc_purchases s
+    join tracks t on s.content_type = 'track' and t.track_id = s.content_id
+    where s.created_at >= ${start}
+      and s.created_at < ${end}
+    group by country_of_sale
+  ),
+  sme_sales as (
+    select
+      country_to_iso_alpha2(coalesce(s.country, 'United States')) as country_of_sale,
+      count(*) as app_sales
+    from usdc_purchases s
+    join tracks t on s.content_type = 'track' and t.track_id = s.content_id
+    where s.created_at >= ${start}
+      and s.created_at < ${end}
+      and t.ddex_app = '0x1bA4906aea0D0f5571bdD6E4985c59Ad97ab51B2'
+    group by country_of_sale
+  )
+
+  select
+    'M' as "Record Type",
+    'QJ76' as "Provider Key",
+    '2222' as "Client Key",
+    ${startFormatted} as "Report Start Date",
+    ${endFormatted} as "Report End Date",
+    'Audius - DTO Products Service' as "Vendor Key Name",
+    'P0A1' as "Vendor Key",
+    a.country_of_sale as "Country Key",
+    10 as "Product Type Key",
+    round(coalesce((s.app_sales::numeric / a.total_sales::numeric) * 100, 0), 2) as "Market Share"
+  from sales a
+  left join sme_sales s on a.country_of_sale = s.country_of_sale
+  `.values()
+
+  const outdir = path.join(__dirname, 'data')
+
   // prepend header row
-  const rowsWithHeader = [...rows]
-  const cols = rows.columns.map((c) => c.name)
+  // GOTCHA - the 'Market Share' column is not included in the header row.
+  // SME's requirement here is weird. It asks for this to be included with the row
+  // and is disambiguated by the 'Record Type' column.
+  const rowsWithHeader = [...standardReportRows, ...marketShareReportRows]
+  const cols = standardReportRows.columns.map((c) => c.name)
   rowsWithHeader.unshift(cols)
 
   const resultCsv = stringify(rowsWithHeader)
-  const fileNameCsv = `P0A1_M_${start.replace(/-/g, '')}_${end.replace(/-/g, '')}.csv`
+  const fileNameCsv = `P0A1_M_${startFormatted}_${endFormatted}.csv`
   
-  fs.writeFileSync(path.join(__dirname, fileNameCsv), resultCsv)
+  fs.writeFileSync(path.join(outdir, fileNameCsv), resultCsv)
 
-  const resultTxt = stringify(rows, { delimiter: '#*#'})
-  const fileNameTxt = `P0A1_M_${start.replace(/-/g, '')}_${end.replace(/-/g, '')}.txt`
-  fs.writeFileSync(path.join(__dirname, fileNameTxt), resultTxt)
+  const resultTxt = stringify(rowsWithHeader, { delimiter: '#*#'})
+  const fileNameTxt = `P0A1_M_${startFormatted}_${endFormatted}.txt`
+  fs.writeFileSync(path.join(outdir, fileNameTxt), resultTxt)
 
   return [fileNameCsv, resultCsv]
 }

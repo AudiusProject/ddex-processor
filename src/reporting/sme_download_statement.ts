@@ -11,8 +11,10 @@ export async function generateSalesReport(
   start: string,
   end: string
 ) {
-  const rows = await sql`
+  const startFormatted = start.replace(/-/g, '')
+  const endFormatted = end.replace(/-/g, '')
 
+  const rows = await sql`
   with
   ddex_sales as (
     select
@@ -44,8 +46,8 @@ export async function generateSalesReport(
   select
     'D' as "Record Type",
     'QJ76' as "Provider Key",
-    ${start.replace(/-/g, '')} as "Report Start Date",
-    ${end.replace(/-/g, '')} as "Report End Date",
+    ${startFormatted} as "Report Start Date",
+    ${endFormatted} as "Report End Date",
     'Audius - DTO Products Service' as "Vendor Key Name",
     'P0A1' as "Vendor Key",
     "Country of sale" as "Country Key",
@@ -63,7 +65,7 @@ export async function generateSalesReport(
     'USD' as "Currency for Customer Retail Price",
     0.90000 as "Per Download Rate",
     'USD' as "Currency for Per Download Rate",
-    '' as "Download Rate Tier Code",
+    0 as "Download Rate Tier Code",
     "Total Sales" * 1.00000 as "Gross Revenue Across All Content Providers in Local Currency",
     "Total Sales" * 1.00000 as "Gross Revenue Across All Content Providers in Payment Currency",
     0 as "VAT Deductions from Gross Revenue",
@@ -72,17 +74,17 @@ export async function generateSalesReport(
     0 as "App Store Total Cost to Provider",
     "Total Sales" * 1.00000 as "Net Revenue Across All Content Providers in Local Currency",
     "Total Sales" * 1.00000 as "Net Revenue Across All Content Providers in Payment Currency",
-    'USD' as "Payment Owed to SME in Local Currency",
+    "Total Sales" * 0.900000 as "Payment Owed to SME in Local Currency",
     'USD' as "Local Currency for Payment Owed to SME",
     1.00 as "Exchange Rate",
-    ${start.replace(/-/g, '')} as "Exchange Rate Date",
+    ${endFormatted} as "Exchange Rate Date",
     "Total Sales" * 0.900000 as "Payment Owed to SME in Payment Currency",
     'USD' as "Payment Currency for Payment Owed to SME",
     "Total Plays" + "Total Downloads" as "Total Plays (or Downloads) Across All Content Providers",
     "Total Plays" + "Total Downloads" as "Total Plays (or Downloads) for SME Content",
     "Total Plays" + "Total Downloads" as "Total Royalty Bearing Plays (or Downloads) Across All",
     "Total Plays" + "Total Downloads" as "Total Royalty Bearing Plays (or Downloads) for SME",
-    100 as "Revenue Share %",
+    CASE WHEN "Country of sale" = 'US' THEN 70 ELSE 62 END as "Revenue Share %",
     100 as "SME Market Share by Usage (Plays or Downloads only)",
     "Total Minutes Streamed" as "Minutes of Audio Delivered",
     '' as "Greater of Calculation: Condition 1",
@@ -99,12 +101,12 @@ export async function generateSalesReport(
   rowsWithHeader.unshift(cols)
 
   const resultCsv = stringify(rowsWithHeader)
-  const fileNameCsv = `P0A1_F_${start.replace(/-/g, '')}_${end.replace(/-/g, '')}_DS.csv`
+  const fileNameCsv = `P0A1_F_${startFormatted}_${endFormatted}_DS.csv`
 
   fs.writeFileSync(path.join(__dirname, fileNameCsv), resultCsv)
 
   const resultTxt = stringify(rows, { delimiter: '#*#' })
-  const fileNameTxt = `P0A1_F_${start.replace(/-/g, '')}_${end.replace(/-/g, '')}_DS.txt`
+  const fileNameTxt = `P0A1_F_${startFormatted}_${endFormatted}_DS.txt`
 
   fs.writeFileSync(path.join(__dirname, fileNameTxt), resultTxt)
 

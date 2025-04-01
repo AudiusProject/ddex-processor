@@ -2,6 +2,7 @@ import 'dotenv/config'
 
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
+import { XMLParser } from 'fast-xml-parser'
 import { fromBuffer as fileTypeFromBuffer } from 'file-type'
 import { Context, Hono } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
@@ -715,6 +716,18 @@ app.get('/xmls/:xmlUrl', (c) => {
   if (!row) return c.json({ error: 'not found' }, 404)
 
   const source = sources.findByXmlUrl(xmlUrl)
+
+  if (c.req.query('parse')) {
+    const parser = new XMLParser({
+      ignoreAttributes: true,
+      isArray: (tagName) =>
+        ['SoundRecording', 'Image', 'Release'].includes(tagName),
+      ignoreDeclaration: true,
+      removeNSPrefix: true,
+    })
+    const json = parser.parse(row.xmlText)
+    return c.json(json)
+  }
 
   // parse=true will parse the xml to internal representation
   if (parseBool(c.req.query('parse'))) {

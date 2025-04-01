@@ -31,6 +31,28 @@ export function dialS3(sourceConfig: BucketConfig) {
 }
 
 export async function pollS3(reset?: boolean) {
+  for await (const xmlDoc of scanS3(reset)) {
+    const { sourceName, xmlUrl, xml } = xmlDoc
+    const releases = parseDdexXml(sourceName, xmlUrl, xml) || []
+
+    // seed resized images so server doesn't have to do at request time
+    for (const release of releases) {
+      for (const img of release.images) {
+        if (img.fileName && img.filePath) {
+          await readAssetWithCaching(
+            xmlUrl,
+            img.filePath,
+            img.fileName,
+            '200',
+            true
+          )
+        }
+      }
+    }
+  }
+}
+
+export async function* scanS3(reset?: boolean) {
   for (const sourceConfig of sources.all()) {
     if (!sourceConfig.awsBucket) {
       console.log(`skipping non-s3 source: ${sourceConfig.name}`)
@@ -65,7 +87,17 @@ export async function pollS3(reset?: boolean) {
     }
 
     for (const prefix of prefixes) {
-      await scanS3Prefix(sourceName, client, bucket, prefix)
+      for await (const xmlPair of scanS3Prefix(
+        sourceName,
+        client,
+        bucket,
+        prefix
+      )) {
+        yield {
+          ...xmlPair,
+          sourceName,
+        }
+      }
       Marker = prefix
     }
 
@@ -78,7 +110,7 @@ export async function pollS3(reset?: boolean) {
 }
 
 // recursively scan a prefix for xml files
-async function scanS3Prefix(
+async function* scanS3Prefix(
   source: string,
   client: S3Client,
   bucket: string,
@@ -107,23 +139,7 @@ async function scanS3Prefix(
       )
       const xml = await Body?.transformToString()
       if (xml) {
-        console.log('parsing', xmlUrl)
-        const releases = parseDdexXml(source, xmlUrl, xml) || []
-
-        // seed resized images so server doesn't have to do at request time
-        for (const release of releases) {
-          for (const img of release.images) {
-            if (img.fileName && img.filePath) {
-              await readAssetWithCaching(
-                xmlUrl,
-                img.filePath,
-                img.fileName,
-                '200',
-                true
-              )
-            }
-          }
-        }
+        yield { xmlUrl, xml }
       }
     }
   }

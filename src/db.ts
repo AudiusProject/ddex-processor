@@ -108,6 +108,12 @@ create table if not exists s3markers (
   sql`delete from users where id = 'lzAWJyO'`
 )
 
+/*
+create table publish_log (
+  userId text not null
+)
+*/
+
 export type XmlRow = {
   source: string
   xmlText: string

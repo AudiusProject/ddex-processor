@@ -8,7 +8,10 @@ import {
 import { LocalStorage } from 'node-localstorage'
 export const localStorage = new LocalStorage('./local-storage')
 
-const identityHost = `https://identityservice.staging.audius.co`
+const IS_PROD = process.env.NODE_ENV == 'production'
+const identityHost = IS_PROD
+  ? 'https://identityservice.audius.co'
+  : 'https://identityservice.staging.audius.co'
 
 export let hedgehog: Hedgehog | undefined
 export const getHedgehog = () => {

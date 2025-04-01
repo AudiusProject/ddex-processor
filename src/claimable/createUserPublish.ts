@@ -39,7 +39,7 @@ export async function publishToClaimableAccount(releaseId: string) {
     if (attempt) {
       handle += `_${attempt}`
     }
-    const email = `steve+${handle}@audius.co`
+    const email = `ddex-support+${handle}@audius.co`
     const password = randomBytes(16).toString('hex')
 
     try {

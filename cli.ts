@@ -11,7 +11,7 @@ import {
 } from './src/publishRelease'
 import { clmReport } from './src/reporting/clm_report'
 import { pollForNewLSRFiles } from './src/reporting/lsr_reader'
-import { pollS3 } from './src/s3poller'
+import { pollS3, scanS3 } from './src/s3poller'
 import { sync } from './src/s3sync'
 import { getSdk } from './src/sdk'
 import { startServer } from './src/server'
@@ -124,6 +124,19 @@ program
   .option('--reset', 'reset cursor, start from beginning')
   .action(async (opts) => {
     await pollS3(opts.reset)
+  })
+
+program
+  .command('scan-s3')
+  .description('Pull down assets from S3 and process')
+  .option('--reset', 'reset cursor, start from beginning')
+  .action(async (opts) => {
+    for await (const xmlPair of scanS3(opts.reset)) {
+      // save to db...
+      // index to es?
+      console.log('woot', xmlPair.sourceName, xmlPair.xmlUrl)
+      await new Promise((r) => setTimeout(r, 1000))
+    }
   })
 
 program

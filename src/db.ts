@@ -106,6 +106,12 @@ create table if not exists s3markers (
   sql`create index numClearedIdx on releases(numCleared)`
 )
 
+/*
+create table publish_log (
+  userId text not null
+)
+*/
+
 export type XmlRow = {
   source: string
   xmlText: string

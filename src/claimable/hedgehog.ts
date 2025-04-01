@@ -1,3 +1,5 @@
+import 'dotenv/config'
+
 import {
   Hedgehog,
   type GetFn,

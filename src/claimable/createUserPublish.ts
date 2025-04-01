@@ -59,7 +59,7 @@ export async function publishToClaimableAccount(releaseId: string) {
         const audiusWalletClient = createHedgehogWalletClient(getHedgehog())
         const userSdk = sdk({
           appName: 'ddex',
-          environment: 'staging', // todo
+          environment: source.env || 'staging',
           services: {
             audiusWalletClient,
           },

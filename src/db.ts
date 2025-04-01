@@ -103,7 +103,9 @@ create table if not exists s3markers (
   sql`alter table users add column password text`,
 
   sql`create index sourceIdx on releases(source)`,
-  sql`create index numClearedIdx on releases(numCleared)`
+  sql`create index numClearedIdx on releases(numCleared)`,
+  sql`delete from users where id = 'yy8w9Zr'`,
+  sql`delete from users where id = 'lzAWJyO'`
 )
 
 export type XmlRow = {

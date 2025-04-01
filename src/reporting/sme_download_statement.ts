@@ -41,8 +41,22 @@ export async function generateSalesReport(
       AND s.created_at < ${end}
       AND s.country is not null
     group by s.country
-  )
-
+  ),
+  total_accounts as (
+    select count(*) from users
+  ),
+  new_accounts as (
+    select count(*) from users where created_at >= ${start} and created_at < ${end}
+  ),
+  prior_month_total_accounts as (
+    select count(*) from users where created_at < ${start}
+  ),
+  active_accounts as (
+    select count(distinct user_id) from plays where created_at >= ${start} and created_at < ${end}
+  ),
+  total_users as (
+    select "count" from aggregate_monthly_unique_users_metrics where timestamp == ${start}
+  ),
   select
     'D' as "Record Type",
     'QJ76' as "Provider Key",
@@ -53,14 +67,14 @@ export async function generateSalesReport(
     "Country of sale" as "Country Key",
     "Country" as "Country",
     11 as "Product Type Key",
-    "User Count" as "Total Users",
-    "User Count" as "Active Users",
-    "User Count" as "Total Accounts",
-    "User Count" as "New Accounts",
-    "User Count" as "Active Accounts",
-    0 as "Inactive Accounts",
-    100 as "Active Accounts % of Total Accounts",
-    0 as "Account Churn",
+    total_users.count as "Total Users",
+    total_users.count as "Active Users",
+    total_accounts.count as "Total Accounts",
+    new_accounts.count as "New Accounts",
+    active_accounts.count as "Active Accounts",
+    total_accounts.count - active_accounts.count as "Inactive Accounts",
+    100 * active_accounts.count / total_accounts.count as "Active Accounts % of Total Accounts",
+    (total_accounts.count - new_accounts.count - prior_month_total_accounts.count) / prior_month_total_accounts.count as "Account Churn",
     1.00000 as "Customer Retail Price",
     'USD' as "Currency for Customer Retail Price",
     0.90000 as "Per Download Rate",

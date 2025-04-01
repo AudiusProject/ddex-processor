@@ -185,6 +185,26 @@ program
     )
     let result: any
     if (releaseRow.entityType == 'album') {
+      const IS_PROD = process.env.NODE_ENV == 'production'
+      const API_HOST = IS_PROD
+        ? 'https://discoveryprovider2.audius.co'
+        : 'https://discoveryprovider2.staging.audius.co'
+
+      const albumUrl = `${API_HOST}/v1/full/playlists/${releaseRow.entityId!}`
+      const sdkAlbums = await fetch(albumUrl).then((r) => r.json())
+      const sdkAlbum = sdkAlbums.data[0]
+
+      // console.log(sdkAlbum)
+      // console.log(sdkAlbum.tracks)
+
+      for (const t of sdkAlbum.tracks) {
+        console.log('delete track', t.id)
+        await sdk.tracks.deleteTrack({
+          trackId: t.id,
+          userId,
+        })
+      }
+
       result = await sdk.albums.deleteAlbum({
         albumId: releaseRow.entityId,
         userId,

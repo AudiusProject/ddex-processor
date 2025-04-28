@@ -70,7 +70,7 @@ export async function generateSalesReport(
     'USD' as "Retail Price per Unit (RPU) Currency",
     0 as "VAT/TAX",
     'USD' as "VAT/TAX Currency",
-    'Front' as "Pricing Tier",
+    0 as "Pricing Tier",
     20 as "Distribution Type Key",
     20 as "Transaction Type Key",
     10 as "Service Type Key",
@@ -124,7 +124,7 @@ export async function generateSalesReport(
     'Audius - DTO Products Service' as "Vendor Key Name",
     'P0A1' as "Vendor Key",
     a.country_of_sale as "Country Key",
-    10 as "Product Type Key",
+    11 as "Product Type Key",
     round(coalesce((s.app_sales::numeric / a.total_sales::numeric) * 100, 0), 2) as "Market Share"
   from sales a
   left join sme_sales s on a.country_of_sale = s.country_of_sale
@@ -145,7 +145,7 @@ export async function generateSalesReport(
   
   fs.writeFileSync(path.join(outdir, fileNameCsv), resultCsv)
 
-  const resultTxt = stringify(rowsWithHeader, { delimiter: '#*#'})
+  const resultTxt = stringify([...standardReportRows, ...marketShareReportRows], { delimiter: '#*#'})
   const fileNameTxt = `P0A1_M_${startFormatted}_${endFormatted}.txt`
   fs.writeFileSync(path.join(outdir, fileNameTxt), resultTxt)
 

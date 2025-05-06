@@ -177,6 +177,14 @@ app.get('/auth/redirect', async (c) => {
   }
 })
 
+app.get('/fun', async (c) => {
+  return c.html(
+    <div>
+      <h1>Fun Times</h1>
+    </div>
+  )
+})
+
 // ====================== AUTH REQUIRED ======================
 
 app.use('*', async (c, next) => {

@@ -1,4 +1,6 @@
 
+
+
 stage::
 	npm run build
 	rsync -r --filter=':- .gitignore' . stage-ddex:fut
@@ -21,3 +23,7 @@ backup.prod::
 	mkdir -p $(FOLDER)
 	time rsync -z prod-ddex:fut/data/* $(FOLDER)
 
+
+
+adminer::
+	open http://localhost:40222/?pgsql=db&username=postgres

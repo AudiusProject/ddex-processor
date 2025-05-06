@@ -22,7 +22,6 @@
     "@aws-sdk/client-s3": "3.658.1",
     "@aws-sdk/credential-provider-ini": "3.658.1",
     "@hono/node-server": "^1.13.1",
-    "@opensearch-project/opensearch": "^3.4.0",
     "@radically-straightforward/sqlite": "^1.1.5",
     "better-sqlite3": "^11.3.0",
     "cheerio": "^1.0.0",

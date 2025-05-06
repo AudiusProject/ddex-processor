@@ -41,6 +41,30 @@ async function main() {
   );
  `
 
+  await sql`
+ create table if not exists releases (
+  source text not null,
+  key text primary key,
+  ref text,
+  xmlUrl text,
+  messageTimestamp text,
+  json jsonb,
+  status text not null,
+
+  entityType text,
+  entityId text,
+  blockHash text,
+  blockNumber integer,
+  publishedAt datetime,
+
+  publishErrorCount integer default 0,
+  lastPublishError text,
+
+  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updatedAt DATETIME
+);
+ `
+
   for await (const xmlPair of scanS3(true)) {
     const { sourceName, xml, xmlUrl } = xmlPair
     if (xmlUrl.includes('Batch')) continue

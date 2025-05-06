@@ -1,5 +1,6 @@
 import 'dotenv/config'
 
+import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { fromBuffer as fileTypeFromBuffer } from 'file-type'
@@ -20,16 +21,11 @@ import {
   userRepo,
   xmlRepo,
 } from './db'
-import {
-  DDEXContributor,
-  DDEXRelease,
-  parseDdexXml,
-  reParsePastXml,
-} from './parseDelivery'
+import { DDEXContributor, DDEXRelease, parseDdexXml } from './parseDelivery'
 import { prepareAlbumMetadata, prepareTrackMetadatas } from './publishRelease'
 import { formatDateToYYYYMMDD, getPriorMonth } from './reporting/date_utils'
 import { generateSalesReport } from './reporting/sales_report'
-import { readAssetWithCaching } from './s3poller'
+import { dialS3, parseS3Url, readAssetWithCaching } from './s3poller'
 import { sources } from './sources'
 import { parseBool } from './util'
 
@@ -415,11 +411,6 @@ ${row._parsed?.soundRecordings.length} tracks"
   )
 })
 
-app.post('/releases/reparse', async (c) => {
-  reParsePastXml()
-  return c.redirect('/releases')
-})
-
 app.get('/releases/:key', (c) => {
   const releaseId = c.req.param('key')
   const row = releaseRepo.get(releaseId)
@@ -709,19 +700,29 @@ app.get('/release/:source/:key/:ref/:size?', async (c) => {
   return c.body(ok.buffer as any)
 })
 
-app.get('/xmls/:xmlUrl', (c) => {
+app.get('/xmls/:xmlUrl', async (c) => {
   const xmlUrl = c.req.param('xmlUrl')
   const row = xmlRepo.get(xmlUrl)
   if (!row) return c.json({ error: 'not found' }, 404)
 
   const source = sources.findByXmlUrl(xmlUrl)
 
+  const client = dialS3(source)
+  const { bucket, key } = parseS3Url(xmlUrl)
+  const { Body } = await client.send(
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    })
+  )
+  const xmlText = await Body!.transformToString()
+
   // parse=true will parse the xml to internal representation
   if (parseBool(c.req.query('parse'))) {
     const parsed = parseDdexXml(
       row.source,
       row.xmlUrl,
-      row.xmlText
+      xmlText
     ) as DDEXRelease[]
 
     // parse=sdk will convert internal representation to SDK friendly format
@@ -747,7 +748,7 @@ app.get('/xmls/:xmlUrl', (c) => {
     return c.json(parsed)
   }
   c.header('Content-Type', 'text/xml')
-  return c.body(row.xmlText)
+  return c.body(xmlText)
 })
 
 app.get('/releases/:key/json', (c) => {

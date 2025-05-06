@@ -162,22 +162,6 @@ export async function parseDelivery(source: string, maybeZip: string) {
   }
 }
 
-export function reParsePastXml() {
-  // loop over db xml and reprocess
-  let cursor = ''
-  while (true) {
-    console.log({ cursor })
-    const rows = xmlRepo.all(cursor)
-    if (!rows.length) {
-      break
-    }
-    for (const row of rows) {
-      parseDdexXml(row.source, row.xmlUrl, row.xmlText)
-      cursor = row.xmlUrl
-    }
-  }
-}
-
 // recursively find + parse xml files in a dir
 export async function processDeliveryDir(source: string, dir: string) {
   const files = await readdir(dir, { recursive: true })
@@ -213,7 +197,6 @@ export function parseDdexXml(source: string, xmlUrl: string, xmlText: string) {
   xmlRepo.upsert({
     source,
     xmlUrl,
-    xmlText,
     messageTimestamp,
   })
 

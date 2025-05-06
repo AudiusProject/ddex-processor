@@ -210,3 +210,9 @@ async function fileExists(path: string) {
     return false
   }
 }
+
+export function parseS3Url(s3Url: string): { bucket: string; key: string } {
+  const match = s3Url.match(/^s3:\/\/([^\/]+)\/(.+)$/)
+  if (!match) throw new Error('Invalid S3 URL format')
+  return { bucket: match[1], key: match[2] }
+}

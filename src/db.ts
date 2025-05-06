@@ -105,12 +105,12 @@ create table if not exists s3markers (
   sql`create index sourceIdx on releases(source)`,
   sql`create index numClearedIdx on releases(numCleared)`,
   sql`delete from users where id = 'yy8w9Zr'`,
-  sql`delete from users where id = 'lzAWJyO'`
+  sql`delete from users where id = 'lzAWJyO'`,
+  sql`alter table xmls drop column xmlText`
 )
 
 export type XmlRow = {
   source: string
-  xmlText: string
   xmlUrl: string
   messageTimestamp: string
   createdAt: string

@@ -4,7 +4,7 @@ import { program } from 'commander'
 import { publishToClaimableAccount } from './src/claimable/createUserPublish'
 import { cleanupFiles } from './src/cleanupFiles'
 import { releaseRepo, userRepo } from './src/db'
-import { parseDelivery, reParsePastXml } from './src/parseDelivery'
+import { parseDelivery } from './src/parseDelivery'
 import {
   prepareTrackMetadatas,
   publishValidPendingReleases,
@@ -35,15 +35,6 @@ program
   .action(async (source, p) => {
     const releases = await parseDelivery(source, p)
     console.log(JSON.stringify(releases, undefined, 2))
-  })
-
-program
-  .command('publish')
-  .description('Publish any valid deliveries')
-  .action(async () => {
-    reParsePastXml()
-    await publishValidPendingReleases()
-    process.exit(0) // sdk client doesn't know when to quit
   })
 
 program
@@ -138,13 +129,6 @@ program
   .description('start background processes, useful for dev')
   .action(async () => {
     startWorker()
-  })
-
-program
-  .command('reparse')
-  .description('reparse all stored xml')
-  .action(async () => {
-    reParsePastXml()
   })
 
 program

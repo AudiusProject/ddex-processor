@@ -299,7 +299,7 @@ export const xmlRepo = {
 
   async upsert(row: Partial<XmlRow>) {
     dbUpsert('xmls', row)
-    await pgUpsert('xmls', row)
+    await pgUpsert('xmls', 'xmlUrl', row)
   },
 }
 
@@ -502,7 +502,7 @@ export const releaseRepo = {
 
     dbUpsert('releases', data)
 
-    await pgUpsert('releases', data)
+    await pgUpsert('releases', 'key', data)
   },
 
   markPrependArtist(key: string, prependArtist: boolean) {
@@ -689,8 +689,15 @@ function dbUpsert(table: string, data: Record<string, any>) {
   return toStmt(rawSql).run(...Object.values(data))
 }
 
-async function pgUpsert(table: string, data: Record<string, any>) {
-  await pgsql`insert into ${pgsql.unsafe(table)} ${pgsql(data)}`
+async function pgUpsert(
+  table: string,
+  pkField: string,
+  data: Record<string, any>
+) {
+  await pgsql.begin(async (tx) => {
+    await tx`delete from ${tx(table)} where ${tx(pkField)} = ${data[pkField]}`
+    await tx`insert into ${pgsql.unsafe(table)} ${pgsql(data)}`
+  })
 }
 
 async function pgUpdate(

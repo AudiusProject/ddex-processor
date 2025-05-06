@@ -3,7 +3,7 @@ import 'dotenv/config'
 import { program } from 'commander'
 import { publishToClaimableAccount } from './src/claimable/createUserPublish'
 import { cleanupFiles } from './src/cleanupFiles'
-import { releaseRepo, userRepo } from './src/db'
+import { pgMigrate, releaseRepo, userRepo } from './src/db'
 import { parseDelivery } from './src/parseDelivery'
 import {
   prepareTrackMetadatas,
@@ -296,7 +296,11 @@ program
 
 program.command('cleanup').description('remove temp files').action(cleanupFiles)
 
-program.parse()
+async function main() {
+  await pgMigrate()
+  program.parse()
+}
+main()
 
 async function startWorker() {
   startUsersPoller().catch(console.error)

@@ -108,7 +108,7 @@ async function scanS3Prefix(
       const xml = await Body?.transformToString()
       if (xml) {
         console.log('parsing', xmlUrl)
-        const releases = parseDdexXml(source, xmlUrl, xml) || []
+        const releases = (await parseDdexXml(source, xmlUrl, xml)) || []
 
         // seed resized images so server doesn't have to do at request time
         for (const release of releases) {

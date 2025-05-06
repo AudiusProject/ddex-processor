@@ -1,12 +1,19 @@
 import sql, { Database, Query } from '@radically-straightforward/sqlite'
 import { Statement } from 'better-sqlite3'
 import { randomBytes } from 'node:crypto'
+import postgres from 'postgres'
 import { DDEXRelease, DDEXReleaseIds } from './parseDelivery'
 import { dataDir } from './sources'
 import { lowerAscii } from './util'
 
 const dbLocation = process.env.SQLITE_URL || `${dataDir}/ddex.db`
 const db = new Database(dbLocation)
+
+const pgsql = postgres({
+  port: 40111,
+  user: 'postgres',
+  pass: 'example',
+})
 
 db.pragma('journal_mode = WAL')
 db.pragma('synchronous = NORMAL')
@@ -108,6 +115,45 @@ create table if not exists s3markers (
   sql`delete from users where id = 'lzAWJyO'`,
   sql`alter table xmls drop column xmlText`
 )
+
+export async function pgMigrate() {
+  await pgsql`
+  CREATE TABLE IF NOT EXISTS xmls (
+    "source" text not null,
+    "xmlUrl" text primary key,
+    "messageTimestamp" text not null,
+    "createdAt" timestamptz DEFAULT CURRENT_TIMESTAMP
+  );`
+
+  await pgsql`
+  CREATE TABLE IF NOT EXISTS releases (
+    "source" text not null,
+    "key" text primary key,
+    "ref" text,
+    "xmlUrl" text,
+    "messageTimestamp" text,
+    "json" jsonb,
+    "status" text not null,
+
+    "entityType" text,
+    "entityId" text,
+    "blockHash" text,
+    "blockNumber" integer,
+    "publishedAt" timestamptz,
+
+    "publishErrorCount" integer default 0,
+    "lastPublishError" text,
+
+    "createdAt" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" timestamptz,
+    "releaseType" text,
+    "releaseDate" text,
+    "numCleared" int,
+    "numNotCleared" int,
+    "prependArtist" boolean
+  );
+  `
+}
 
 export type XmlRow = {
   source: string
@@ -251,8 +297,9 @@ export const xmlRepo = {
     return xmls
   },
 
-  upsert(row: Partial<XmlRow>) {
+  async upsert(row: Partial<XmlRow>) {
     dbUpsert('xmls', row)
+    await pgUpsert('xmls', row)
   },
 }
 
@@ -375,84 +422,88 @@ export const releaseRepo = {
     dbUpdate('releases', 'key', r)
   },
 
-  upsert: db.transaction(
-    (
-      source: string,
-      xmlUrl: string,
-      messageTimestamp: string,
-      release: DDEXRelease
-    ) => {
-      const key = releaseRepo.chooseReleaseId(release.releaseIds)
-      const prior = releaseRepo.get(key)
+  upsert: async (
+    source: string,
+    xmlUrl: string,
+    messageTimestamp: string,
+    release: DDEXRelease
+  ) => {
+    const key = releaseRepo.chooseReleaseId(release.releaseIds)
+    const prior = releaseRepo.get(key)
 
-      // skip TrackRelease, since we only want main releases
-      if (release.releaseType == 'TrackRelease') {
-        return
-      }
-
-      // if prior exists and is newer, skip
-      if (prior && prior.messageTimestamp > messageTimestamp) {
-        console.log(`skipping ${xmlUrl} because ${key} is newer`)
-        return
-      }
-
-      if (!release.audiusUser) {
-        release.problems.push(`NoUser`)
-      } else {
-        const idx = release.problems.indexOf(`NoUser`)
-        if (idx != -1) {
-          release.problems.splice(idx, 1)
-        }
-      }
-
-      const json = JSON.stringify(release)
-
-      // if same xmlUrl + json, skip
-      // may want some smarter json compare here
-      // if this is causing spurious sdk updates to be issued
-      // if (prior && prior.xmlUrl == xmlUrl && prior.json == json) {
-      //   return
-      // }
-
-      let status: ReleaseRow['status'] = release.problems.length
-        ? ReleaseProcessingStatus.Blocked
-        : ReleaseProcessingStatus.PublishPending
-
-      // if prior is published and latest version has no deal,
-      // treat as takedown
-      if (prior?.entityId && release.deals.length == 0) {
-        status = ReleaseProcessingStatus.DeletePending
-      }
-
-      // pull out original resource URLs
-      // so if an update comes in we can still resolve the original file
-      for (const r of [...release.soundRecordings, ...release.images]) {
-        if (r.ref && r.filePath && r.fileName) {
-          dbUpsert('assets', {
-            source: source,
-            releaseId: key,
-            ref: r.ref,
-            xmlUrl: xmlUrl,
-            filePath: r.filePath,
-            fileName: r.fileName,
-          })
-        }
-      }
-
-      dbUpsert('releases', {
-        source,
-        key,
-        status,
-        ref: release.ref,
-        releaseType: release.releaseType,
-        releaseDate: release.releaseDate,
-        xmlUrl,
-        messageTimestamp,
-        json,
-        updatedAt: new Date().toISOString(),
-      } as Partial<ReleaseRow>)
+    // skip TrackRelease, since we only want main releases
+    if (release.releaseType == 'TrackRelease') {
+      return
     }
-  ),
+
+    // if prior exists and is newer, skip
+    if (prior && prior.messageTimestamp > messageTimestamp) {
+      console.log(`skipping ${xmlUrl} because ${key} is newer`)
+      return
+    }
+
+    if (!release.audiusUser) {
+      release.problems.push(`NoUser`)
+    } else {
+      const idx = release.problems.indexOf(`NoUser`)
+      if (idx != -1) {
+        release.problems.splice(idx, 1)
+      }
+    }
+
+    const json = JSON.stringify(release)
+
+    // if same xmlUrl + json, skip
+    // may want some smarter json compare here
+    // if this is causing spurious sdk updates to be issued
+    // if (prior && prior.xmlUrl == xmlUrl && prior.json == json) {
+    //   return
+    // }
+
+    let status: ReleaseRow['status'] = release.problems.length
+      ? ReleaseProcessingStatus.Blocked
+      : ReleaseProcessingStatus.PublishPending
+
+    // if prior is published and latest version has no deal,
+    // treat as takedown
+    if (prior?.entityId && release.deals.length == 0) {
+      status = ReleaseProcessingStatus.DeletePending
+    }
+
+    // pull out original resource URLs
+    // so if an update comes in we can still resolve the original file
+    for (const r of [...release.soundRecordings, ...release.images]) {
+      if (r.ref && r.filePath && r.fileName) {
+        dbUpsert('assets', {
+          source: source,
+          releaseId: key,
+          ref: r.ref,
+          xmlUrl: xmlUrl,
+          filePath: r.filePath,
+          fileName: r.fileName,
+        })
+
+        // await pgUpsert('')
+      }
+    }
+
+    const data = {
+      source,
+      key,
+      status,
+      ref: release.ref,
+      releaseType: release.releaseType,
+      releaseDate: release.releaseDate,
+      xmlUrl,
+      messageTimestamp,
+      json,
+      updatedAt: new Date().toISOString(),
+    } as Partial<ReleaseRow>
+
+    dbUpsert('releases', data)
+
+    await pgUpsert('releases', data)
+  },
 
   markPrependArtist(key: string, prependArtist: boolean) {
     db.run(sql`
@@ -636,6 +687,18 @@ function dbUpsert(table: string, data: Record<string, any>) {
     insert into ${table} (${fields}) values (${qs})
     on conflict do update set ${excludes}`
   return toStmt(rawSql).run(...Object.values(data))
+}
+
+async function pgUpsert(table: string, data: Record<string, any>) {
+  await pgsql`insert into ${pgsql.unsafe(table)} ${pgsql(data)}`
+}
+
+async function pgUpdate(
+  table: string,
+  pkField: string,
+  data: Record<string, any>
+) {
+  await pgsql`update ${pgsql.unsafe(table)} set ${pgsql(data)} where ${pgsql.unsafe(pkField)} = ${data[pkField]}`
 }
 
 function ifdef(obj: any, snippet: any, fallback?: any) {

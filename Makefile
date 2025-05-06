@@ -21,3 +21,9 @@ backup.prod::
 	mkdir -p $(FOLDER)
 	time rsync -z prod-ddex:fut/data/* $(FOLDER)
 
+
+adminer::
+	open http://localhost:40222/?pgsql=db&username=postgres
+
+psql::
+	psql postgresql://postgres:example@localhost:40111/postgres

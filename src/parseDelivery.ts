@@ -181,7 +181,11 @@ export async function parseDdexXmlFile(source: string, xmlUrl: string) {
 }
 
 // actually parse ddex xml
-export function parseDdexXml(source: string, xmlUrl: string, xmlText: string) {
+export async function parseDdexXml(
+  source: string,
+  xmlUrl: string,
+  xmlText: string
+) {
   const $ = cheerio.load(xmlText, { xmlMode: true })
 
   const messageTimestamp = $('MessageCreatedDateTime').first().text()
@@ -194,7 +198,7 @@ export function parseDdexXml(source: string, xmlUrl: string, xmlText: string) {
   const isUpdate = $('UpdateIndicator').text() == 'UpdateMessage'
 
   // todo: would be nice to skip this on reParse
-  xmlRepo.upsert({
+  await xmlRepo.upsert({
     source,
     xmlUrl,
     messageTimestamp,
@@ -210,7 +214,7 @@ export function parseDdexXml(source: string, xmlUrl: string, xmlText: string) {
     // create or replace this release in db
     const releases = parseReleaseXml(source, $)
     for (const release of releases) {
-      releaseRepo.upsert(source, xmlUrl, messageTimestamp, release)
+      await releaseRepo.upsert(source, xmlUrl, messageTimestamp, release)
     }
     return releases
   } else {

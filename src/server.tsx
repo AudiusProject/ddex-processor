@@ -200,14 +200,14 @@ app.use('*', async (c, next) => {
   await next()
 })
 
-app.get('/releases', (c) => {
+app.get('/releases', async (c) => {
   const queryCleared = c.req.query('cleared') == 'on'
   const querySearch = c.req.query('search')
   const queryStatus = c.req.query('status')
   const querySource = c.req.query('source')
   const limit = parseInt(c.req.query('limit') || '100')
   const offset = parseInt(c.req.query('offset') || '0')
-  const rows = releaseRepo.all({
+  const rows = await releaseRepo.all({
     status: queryStatus,
     source: querySource,
     pendingPublish: parseBool(c.req.query('pendingPublish')),
@@ -411,9 +411,9 @@ ${row._parsed?.soundRecordings.length} tracks"
   )
 })
 
-app.get('/releases/:key', (c) => {
+app.get('/releases/:key', async (c) => {
   const releaseId = c.req.param('key')
-  const row = releaseRepo.get(releaseId)
+  const row = await releaseRepo.get(releaseId)
   if (!row) return c.json({ error: 'not found' }, 404)
   if (c.req.query('json') != undefined) {
     return c.json(row)
@@ -641,7 +641,7 @@ app.get('/stats', async (c) => {
 })
 
 app.get('/history/:key', async (c) => {
-  const xmls = xmlRepo.find(c.req.param('key'))
+  const xmls = await xmlRepo.find(c.req.param('key'))
   return c.html(
     Layout(html`
       <table>
@@ -677,7 +677,7 @@ app.get('/release/:source/:key/:ref/:size?', async (c) => {
   const ref = c.req.param('ref')
   const size = c.req.param('size')
 
-  const asset = assetRepo.get(source, key, ref)
+  const asset = await assetRepo.get(source, key, ref)
   if (!asset) return c.json({ error: 'not found' }, 404)
 
   const ok = await readAssetWithCaching(
@@ -702,7 +702,7 @@ app.get('/release/:source/:key/:ref/:size?', async (c) => {
 
 app.get('/xmls/:xmlUrl', async (c) => {
   const xmlUrl = c.req.param('xmlUrl')
-  const row = xmlRepo.get(xmlUrl)
+  const row = await xmlRepo.get(xmlUrl)
   if (!row) return c.json({ error: 'not found' }, 404)
 
   const source = sources.findByXmlUrl(xmlUrl)
@@ -719,11 +719,11 @@ app.get('/xmls/:xmlUrl', async (c) => {
 
   // parse=true will parse the xml to internal representation
   if (parseBool(c.req.query('parse'))) {
-    const parsed = parseDdexXml(
+    const parsed = (await parseDdexXml(
       row.source,
       row.xmlUrl,
       xmlText
-    ) as DDEXRelease[]
+    )) as DDEXRelease[]
 
     // parse=sdk will convert internal representation to SDK friendly format
     if (c.req.query('parse') == 'sdk') {
@@ -751,15 +751,15 @@ app.get('/xmls/:xmlUrl', async (c) => {
   return c.body(xmlText)
 })
 
-app.get('/releases/:key/json', (c) => {
-  const row = releaseRepo.get(c.req.param('key'))
+app.get('/releases/:key/json', async (c) => {
+  const row = await releaseRepo.get(c.req.param('key'))
   if (!row) return c.json({ error: 'not found' }, 404)
   c.header('Content-Type', 'application/json')
   return c.body(row?.json)
 })
 
-app.get('/releases/:key/error', (c) => {
-  const row = releaseRepo.get(c.req.param('key'))
+app.get('/releases/:key/error', async (c) => {
+  const row = await releaseRepo.get(c.req.param('key'))
   if (!row) return c.json({ error: 'not found' }, 404)
   return c.text(row.lastPublishError)
 })
@@ -805,7 +805,7 @@ app.get('/users', (c) => {
 
 app.get('/associate/:releaseId', async (c) => {
   const releaseId = c.req.param('releaseId')
-  const releaseRow = releaseRepo.get(releaseId)
+  const releaseRow = await releaseRepo.get(releaseId)
   const release = releaseRow?._parsed
   const user = userRepo.findOne({ id: c.req.query('userId') })
   const source = sources.findByName(releaseRow?.source || '')
@@ -828,7 +828,7 @@ app.get('/associate/:releaseId', async (c) => {
 
 app.post('/publish/:releaseId', async (c) => {
   const releaseId = c.req.param('releaseId')
-  const releaseRow = releaseRepo.get(releaseId)
+  const releaseRow = await releaseRepo.get(releaseId)
   const release = releaseRow?._parsed
   const source = sources.findByName(releaseRow?.source || '')
   if (!releaseRow || !source || !release) {

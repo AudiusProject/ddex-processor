@@ -3,8 +3,9 @@ import 'dotenv/config'
 import { program } from 'commander'
 import { publishToClaimableAccount } from './src/claimable/createUserPublish'
 import { cleanupFiles } from './src/cleanupFiles'
-import { pgMigrate, releaseRepo, userRepo } from './src/db'
+import { releaseRepo, userRepo } from './src/db'
 import { parseDelivery } from './src/parseDelivery'
+import { pgMigrate } from './src/pg'
 import {
   prepareTrackMetadatas,
   publishValidPendingReleases,
@@ -47,7 +48,7 @@ program
     'Prepend artist name: <artist> - <title>.  Useful for label accounts'
   )
   .action(async (releaseId, userId, opts) => {
-    const releaseRow = releaseRepo.get(releaseId)
+    const releaseRow = await releaseRepo.get(releaseId)
     const release = releaseRow?._parsed
     if (!releaseRow || !release) {
       throw new Error(`release not found: ${releaseId}`)
@@ -144,7 +145,7 @@ program
   .description('Delete a release... USE CAUTION')
   .argument('<release_id>', 'release ID to delete')
   .action(async (releaseId) => {
-    const releaseRow = releaseRepo.get(releaseId)
+    const releaseRow = await releaseRepo.get(releaseId)
     if (!releaseRow) {
       console.warn(`no release for id: ${releaseId}`)
       process.exit(1)
@@ -224,7 +225,7 @@ program
   .description('issue sdk updates for all album tracks')
   .argument('<release_id>', 'release ID to republish')
   .action(async (releaseId) => {
-    const releaseRow = releaseRepo.get(releaseId)
+    const releaseRow = await releaseRepo.get(releaseId)
     if (!releaseRow) {
       throw new Error(`Release ID ${releaseId} not found`)
     }

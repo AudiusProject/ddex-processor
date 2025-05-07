@@ -9,7 +9,7 @@ import { encodeId } from '../util'
 import { getHedgehog } from './hedgehog'
 
 export async function publishToClaimableAccount(releaseId: string) {
-  const releaseRow = releaseRepo.get(releaseId)
+  const releaseRow = await releaseRepo.get(releaseId)
   const release = releaseRow?._parsed
   if (!releaseRow || !release) {
     throw new Error(`release not found: ${releaseId}`)
@@ -24,7 +24,7 @@ export async function publishToClaimableAccount(releaseId: string) {
 
   // read image asset file
   async function resolveFile({ ref }: DDEXResource) {
-    const asset = assetRepo.get(releaseRow!.source, releaseRow!.key, ref)
+    const asset = await assetRepo.get(releaseRow!.source, releaseRow!.key, ref)
     if (!asset) {
       throw new Error(`failed to resolve asset ${releaseRow!.key} ${ref}`)
     }
@@ -45,7 +45,7 @@ export async function publishToClaimableAccount(releaseId: string) {
     try {
       // attempt to find existing user record
       // if not found, create a claimable account
-      let encodedUserId = userRepo.match(source.ddexKey, [artistName])
+      let encodedUserId = await userRepo.match(source.ddexKey, [artistName])
       if (!encodedUserId) {
         // no user: create claimable user
         console.log(`=== creating claimable account for ${artistName}`)
@@ -95,18 +95,19 @@ export async function publishToClaimableAccount(releaseId: string) {
         console.log('grantResult', grantResult)
 
         // save user details to db
-        userRepo.upsert({
+        await userRepo.upsert({
           id: encodedUserId,
           apiKey: source.ddexKey,
           handle: handle,
           name: artistName,
           password,
+          createdAt: new Date(),
         })
       }
 
       // save release with associated audius user
       release.audiusUser = encodedUserId
-      releaseRepo.upsert(
+      await releaseRepo.upsert(
         releaseRow.source,
         releaseRow.xmlUrl,
         releaseRow.messageTimestamp,

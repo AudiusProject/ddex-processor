@@ -209,10 +209,15 @@ export async function parseDdexXml(
   } else if (tagName == 'PurgeReleaseMessage') {
     // mark release rows as DeletePending
     const { releaseIds } = parsePurgeXml($)
-    releaseRepo.markForDelete(source, xmlUrl, messageTimestamp, releaseIds)
+    await releaseRepo.markForDelete(
+      source,
+      xmlUrl,
+      messageTimestamp,
+      releaseIds
+    )
   } else if (tagName == 'NewReleaseMessage') {
     // create or replace this release in db
-    const releases = parseReleaseXml(source, $)
+    const releases = await parseReleaseXml(source, $)
     for (const release of releases) {
       await releaseRepo.upsert(source, xmlUrl, messageTimestamp, release)
     }
@@ -225,7 +230,7 @@ export async function parseDdexXml(
 //
 // parseRelease
 //
-function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
+async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
   function toTexts($doc: CH) {
     return $doc.map((_, el) => $(el).text()).get()
   }
@@ -482,9 +487,9 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
   // parse releases
   //
 
-  const releases = $('Release')
+  const work = $('Release')
     .toArray()
-    .map((el) => {
+    .map(async (el) => {
       const $el = $(el)
 
       const ref = $el.find('ReleaseReference').text()
@@ -540,7 +545,10 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
       const artistNames = release.artists.map((a) => a.name)
       const sourceConfig = sources.findByName(source)
       if (sourceConfig) {
-        release.audiusUser = userRepo.match(sourceConfig.ddexKey, artistNames)
+        release.audiusUser = await userRepo.match(
+          sourceConfig.ddexKey,
+          artistNames
+        )
       }
 
       // resolve resources
@@ -573,6 +581,8 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
 
       return release
     })
+
+  const releases = await Promise.all(work)
 
   // resolve any missing images to main release if possible
   const mainRelease = releases.find((r) => r.isMainRelease)

@@ -4,8 +4,8 @@ import { program } from 'commander'
 import { publishToClaimableAccount } from './src/claimable/createUserPublish'
 import { cleanupFiles } from './src/cleanupFiles'
 import { releaseRepo, userRepo } from './src/db'
+import { pgMigrate } from './src/db/migrations'
 import { parseDelivery } from './src/parseDelivery'
-import { pgMigrate } from './src/pg'
 import {
   prepareTrackMetadatas,
   publishValidPendingReleases,
@@ -55,10 +55,7 @@ program
     }
 
     const source = sources.findByName(releaseRow.source)
-    const user = userRepo.findOne({
-      id: userId,
-      apiKey: source?.ddexKey,
-    })
+    const user = await userRepo.findById(userId)
 
     if (!user) {
       throw new Error(`connected user not found: ${userId}`)
@@ -83,7 +80,7 @@ program
 
     await sleep(5_000)
 
-    releaseRepo.upsert(
+    await releaseRepo.upsert(
       releaseRow.source,
       releaseRow.xmlUrl,
       releaseRow.messageTimestamp,

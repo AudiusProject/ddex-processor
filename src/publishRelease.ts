@@ -16,7 +16,7 @@ const DEFAULT_TRACK_PRICE = 1.0
 const DEFAULT_ALBUM_PRICE = 5.0
 
 export async function publishValidPendingReleases() {
-  const rows = releaseRepo.all({ pendingPublish: true })
+  const rows = await releaseRepo.all({ pendingPublish: true })
   if (!rows.length) return
 
   for (const row of rows) {
@@ -44,7 +44,7 @@ export async function publishValidPendingReleases() {
         await publishRelease(source, row, parsed)
       } catch (e: any) {
         console.log('failed to publish', row.key, e)
-        releaseRepo.addPublishError(row.key, e)
+        await releaseRepo.addPublishError(row.key, e)
       }
     }
   }
@@ -72,7 +72,7 @@ export async function publishRelease(
 
   // read asset file
   async function resolveFile({ ref }: DDEXResource) {
-    const asset = assetRepo.get(source.name, releaseRow.key, ref)
+    const asset = await assetRepo.get(source.name, releaseRow.key, ref)
     if (!asset) {
       throw new Error(`failed to resolve asset ${releaseRow.key} ${ref}`)
     }
@@ -112,7 +112,7 @@ export async function publishRelease(
     console.log(result)
 
     // on success set publishedAt, entityId, blockhash
-    releaseRepo.update({
+    await releaseRepo.update({
       key: releaseRow.key,
       status: ReleaseProcessingStatus.Published,
       entityType: 'album',
@@ -147,7 +147,7 @@ export async function publishRelease(
     console.log(result)
 
     // on succes: update releases
-    releaseRepo.update({
+    await releaseRepo.update({
       key: releaseRow.key,
       status: ReleaseProcessingStatus.Published,
       entityType: 'track',
@@ -173,7 +173,7 @@ export async function updateTrack(
     metadata: metas[0],
   })
 
-  releaseRepo.update({
+  await releaseRepo.update({
     key: row.key,
     status: ReleaseProcessingStatus.Published,
     publishedAt: new Date().toISOString(),
@@ -318,7 +318,7 @@ export async function updateAlbum(
     metadata: meta,
   })
 
-  releaseRepo.update({
+  await releaseRepo.update({
     key: row.key,
     status: ReleaseProcessingStatus.Published,
     publishedAt: new Date().toISOString(),
@@ -335,7 +335,7 @@ export async function deleteRelease(source: SourceConfig, r: ReleaseRow) {
 
   // if not yet published to audius, mark internal releases row as deleted
   if (!userId || !entityId) {
-    releaseRepo.update({
+    await releaseRepo.update({
       key: r.key,
       status: ReleaseProcessingStatus.Deleted,
     })
@@ -356,8 +356,8 @@ export async function deleteRelease(source: SourceConfig, r: ReleaseRow) {
     return onDeleted(result)
   }
 
-  function onDeleted(result: any) {
-    releaseRepo.update({
+  async function onDeleted(result: any) {
+    await releaseRepo.update({
       key: r.key,
       status: ReleaseProcessingStatus.Deleted,
       publishedAt: new Date().toISOString(),

@@ -1,9 +1,9 @@
 import { PutObjectCommand } from '@aws-sdk/client-s3'
-import sql from '@radically-straightforward/sqlite'
 import { stringify } from 'csv-stringify/sync'
 import { mkdir, writeFile } from 'fs/promises'
 import path from 'path'
-import { releaseRepo, s3markerRepo } from '../db'
+import { releaseRepo, ReleaseRow, s3markerRepo } from '../db'
+import { sql } from '../db/sql'
 import { dialS3 } from '../s3poller'
 import { sources } from '../sources'
 
@@ -21,12 +21,12 @@ export async function clmReport() {
     console.log('Running CLM report')
   }
 
-  const releases = releaseRepo.rawSelect(sql`
+  const releases: ReleaseRow[] = await sql`
     select * from releases
     where releaseType != 'TrackRelease'
     and messageTimestamp > ${marker}
     order by messageTimestamp asc
-  `)
+  `
   if (releases.length == 0) {
     console.log('no new CLM releases')
     return
@@ -34,6 +34,7 @@ export async function clmReport() {
 
   const rows = releases.flatMap((releaseRow) => {
     marker = releaseRow.messageTimestamp
+    releaseRow._parsed = JSON.parse(releaseRow.json)
     const r = releaseRow._parsed!
     return r.soundRecordings.map((track) => {
       if (!track.isrc) {

@@ -147,11 +147,12 @@ app.get('/auth/redirect', async (c) => {
     }
 
     // upsert user record
-    userRepo.upsert({
+    await userRepo.upsert({
       apiKey: payload.apiKey,
       id: payload.userId,
       handle: payload.handle,
       name: payload.name,
+      createdAt: new Date(),
     })
 
     // after user upsert, rescan for matches
@@ -232,7 +233,7 @@ app.get('/releases', async (c) => {
     if (!val) return
     return html`<a
       class="plain contrast"
-      href="${withQueryParam('search', `"${val}"`)}"
+      href="${withQueryParam('search', `${val}`)}"
     >
       ${val}
     </a>`
@@ -437,7 +438,7 @@ app.get('/releases/:key', async (c) => {
   const parsedRelease = row._parsed!
   const clears = isClearedRepo.listForRelease(releaseId)
 
-  const allUsers = userRepo.all()
+  const allUsers = await userRepo.all()
 
   const associatedUser = parsedRelease.audiusUser
     ? allUsers.find((u) => u.id == parsedRelease.audiusUser)
@@ -636,7 +637,7 @@ app.get('/releases/:key', async (c) => {
 })
 
 app.get('/stats', async (c) => {
-  const stats = releaseRepo.stats()
+  const stats = await releaseRepo.stats()
   return c.json(stats)
 })
 
@@ -764,8 +765,8 @@ app.get('/releases/:key/error', async (c) => {
   return c.text(row.lastPublishError)
 })
 
-app.get('/users', (c) => {
-  const users = userRepo.all()
+app.get('/users', async (c) => {
+  const users = await userRepo.all()
   return c.html(
     Layout(
       html`<h1>Users</h1>
@@ -807,7 +808,7 @@ app.get('/associate/:releaseId', async (c) => {
   const releaseId = c.req.param('releaseId')
   const releaseRow = await releaseRepo.get(releaseId)
   const release = releaseRow?._parsed
-  const user = userRepo.findOne({ id: c.req.query('userId') })
+  const user = await userRepo.findById(c.req.query('userId')!)
   const source = sources.findByName(releaseRow?.source || '')
   if (!releaseRow || !user || !source || !release) {
     return c.text('not found', 404)
@@ -815,14 +816,17 @@ app.get('/associate/:releaseId', async (c) => {
 
   release.audiusUser = user.id
 
-  releaseRepo.upsert(
+  await releaseRepo.upsert(
     releaseRow.source,
     releaseRow.xmlUrl,
     releaseRow.messageTimestamp,
     release
   )
 
-  releaseRepo.markPrependArtist(releaseId, c.req.query('prependArtist') == 'on')
+  await releaseRepo.markPrependArtist(
+    releaseId,
+    c.req.query('prependArtist') == 'on'
+  )
   return c.redirect(`/releases/${releaseId}`)
 })
 
@@ -939,8 +943,8 @@ async function getAudiusUser(c: Context) {
   return me
 }
 
-function audiusUserLink(id: string) {
-  const user = userRepo.findOne({ id })
+async function audiusUserLink(id: string) {
+  const user = await userRepo.findById(id)
   if (!user) {
     return html`User ${id} not in database`
   }

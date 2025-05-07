@@ -1,103 +1,10 @@
-import postgres from 'postgres'
-import { ReleaseProcessingStatus, ReleaseRow, XmlRow } from './db'
-import { DDEXRelease, DDEXReleaseIds } from './parseDelivery'
-
-const sql = postgres({
-  port: 40111,
-  user: 'postgres',
-  pass: 'example',
-})
-
-export async function pgMigrate() {
-  await sql`
-  CREATE TABLE IF NOT EXISTS xmls (
-    "source" text not null,
-    "xmlUrl" text primary key,
-    "messageTimestamp" text not null,
-    "createdAt" timestamptz DEFAULT CURRENT_TIMESTAMP
-  );`
-
-  await sql`
-  CREATE TABLE IF NOT EXISTS releases (
-    "source" text not null,
-    "key" text primary key,
-    "ref" text,
-    "xmlUrl" text,
-    "messageTimestamp" text,
-    "json" jsonb,
-    "status" text not null,
-
-    "entityType" text,
-    "entityId" text,
-    "blockHash" text,
-    "blockNumber" integer,
-    "publishedAt" timestamptz,
-
-    "publishErrorCount" integer default 0,
-    "lastPublishError" text,
-
-    "createdAt" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" timestamptz,
-    "releaseType" text,
-    "releaseDate" text,
-    "numCleared" int,
-    "numNotCleared" int,
-    "prependArtist" boolean
-  );
-  `
-
-  await sql`
-  create table if not exists assets (
-    "source" text not null,
-    "releaseId" text not null,
-    "ref" text not null,
-    "xmlUrl" text not null,
-    "filePath" text not null,
-    "fileName" text not null,
-    PRIMARY KEY ("source", "releaseId", "ref")
-  );
-  `
-}
-
-//
-// xml repo
-//
-
-export const xmlRepo = {
-  async all(cursor: string) {
-    const rows: XmlRow[] = await sql`
-      select * from xmls
-      where "xmlUrl" > ${cursor}
-      order by "xmlUrl"
-      limit 1000`
-    return rows
-  },
-
-  async get(xmlUrl: string) {
-    const rows = await sql`select * from xmls where "xmlUrl" = ${xmlUrl}`
-    return rows[0]
-  },
-
-  async find(query: string) {
-    const xmls: XmlRow[] = await sql`
-        select * from xmls
-        where "xmlUrl" like '%' || ${query} || '%'
-        order by "messageTimestamp" desc`
-    return xmls
-  },
-
-  async upsert(row: Partial<XmlRow>) {
-    await pgUpsert('xmls', 'xmlUrl', row)
-  },
-}
-
-//
-//
-//
-
 //
 // release repo
 //
+
+import { ReleaseProcessingStatus, ReleaseRow } from '../db'
+import { DDEXRelease, DDEXReleaseIds } from '../parseDelivery'
+import { ifdef, pgInsert, pgUpsert, sql } from './sql'
 
 type FindReleaseParams = {
   pendingPublish?: boolean
@@ -157,7 +64,7 @@ export const releaseRepo = {
 
       ${ifdef(params.source, sql` and "source" = ${params.source!} `)}
 
-      ${ifdef(params.search, sql` and "json" like '%' || ${params.search!} || '%' `)}
+      ${ifdef(params.search, sql` and "json"::text like '%' || ${params.search!} || '%' `)}
 
       ${ifdef(params.cleared, sql` and "numCleared" > 0 `)}
 
@@ -190,7 +97,7 @@ export const releaseRepo = {
   },
 
   async update(r: Partial<ReleaseRow>) {
-    await pgUpdate('releases', 'key', r)
+    await pgUpsert('releases', 'key', r)
   },
 
   upsert: async (
@@ -318,56 +225,3 @@ export const releaseRepo = {
     `
   },
 }
-
-//
-// Resource repo
-//
-
-export type AssetRow = {
-  releaseId: string
-  ref: string
-  xmlUrl: string
-  filePath: string
-  fileName: string
-}
-
-export const assetRepo = {
-  async get(source: string, releaseId: string, ref: string) {
-    const rows =
-      await sql`select * from assets where source = ${source} and "releaseId" = ${releaseId} and ref = ${ref}`
-    return rows[0] as AssetRow
-  },
-}
-
-//
-//
-//
-
-export async function pgInsert(table: string, data: Record<string, any>) {
-  await sql`insert into ${sql.unsafe(table)} ${sql(data)} on conflict do nothing`
-}
-
-export async function pgUpsert(
-  table: string,
-  pkField: string,
-  data: Record<string, any>
-) {
-  await sql.begin(async (tx) => {
-    await tx`delete from ${tx(table)} where ${tx(pkField)} = ${data[pkField]}`
-    await tx`insert into ${sql.unsafe(table)} ${sql(data)}`
-  })
-}
-
-export async function pgUpdate(
-  table: string,
-  pkField: string,
-  data: Record<string, any>
-) {
-  await sql`update ${sql.unsafe(table)} set ${sql(data)} where ${sql.unsafe(pkField)} = ${data[pkField]}`
-}
-
-function ifdef(cond: any, stmt: any) {
-  return cond ? stmt : sql``
-}
-
-//

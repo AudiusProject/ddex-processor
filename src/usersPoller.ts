@@ -9,7 +9,7 @@ export async function startUsersPoller() {
   // Periodic task to fetch user data and update names
   setInterval(async () => {
     try {
-      const users = userRepo.all()
+      const users = await userRepo.all()
 
       for (const user of users) {
         const { data: userResponse } = await sdk.users.getUser({ id: user.id })
@@ -17,7 +17,7 @@ export async function startUsersPoller() {
           throw new Error(`Error fetching user ${user.id} from sdk`)
         }
         if (userResponse.name !== user.name) {
-          userRepo.upsert({
+          await userRepo.upsert({
             ...user,
             name: userResponse.name,
           })

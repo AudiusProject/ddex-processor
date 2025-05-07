@@ -3,9 +3,13 @@ import { Statement } from 'better-sqlite3'
 import { randomBytes } from 'node:crypto'
 import { DDEXRelease } from './parseDelivery'
 import { dataDir } from './sources'
-import { lowerAscii } from './util'
 
-export { assetRepo, releaseRepo, xmlRepo } from './pg'
+export { assetRepo } from './db/assetRepo'
+export { releaseRepo } from './db/releaseRepo'
+export { userRepo } from './db/userRepo'
+export { xmlRepo } from './db/xmlRepo'
+
+// export { assetRepo, releaseRepo, xmlRepo } from './pg'
 
 const dbLocation = process.env.SQLITE_URL || `${dataDir}/ddex.db`
 const db = new Database(dbLocation)
@@ -123,7 +127,7 @@ export type UserRow = {
   id: string
   handle: string
   name: string
-  createdAt: string
+  createdAt: Date
   password?: string
 }
 
@@ -185,43 +189,6 @@ export const s3markerRepo = {
 
   upsert(bucket: string, marker: string) {
     db.run(sql`replace into s3markers values (${bucket}, ${marker})`)
-  },
-}
-
-//
-// user repo
-//
-
-export const userRepo = {
-  all() {
-    return db.all<UserRow>(sql`select * from users`)
-  },
-
-  find(example: Partial<UserRow>) {
-    return dbSelect('users', example) as UserRow[]
-  },
-
-  findOne(example: Partial<UserRow>) {
-    return dbSelectOne('users', example) as UserRow | undefined
-  },
-
-  upsert(user: Partial<UserRow>) {
-    dbUpsert('users', user)
-  },
-
-  match(apiKey: string, artistNames: string[]) {
-    const artistSet = new Set(artistNames.map(lowerAscii))
-    const users = db.all<UserRow>(
-      sql`select * from users where apiKey = ${apiKey}`
-    )
-    for (const u of users) {
-      if (
-        artistSet.has(lowerAscii(u.name)) ||
-        artistSet.has(lowerAscii(u.handle))
-      ) {
-        return u.id
-      }
-    }
   },
 }
 

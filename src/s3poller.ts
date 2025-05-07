@@ -45,7 +45,7 @@ export async function pollS3(reset?: boolean) {
 
     // load prior marker
     if (!reset) {
-      Marker = s3markerRepo.get(bucket)
+      Marker = await s3markerRepo.get(bucket)
     }
 
     // list top level prefixes after marker
@@ -72,7 +72,7 @@ export async function pollS3(reset?: boolean) {
     // save marker
     if (Marker) {
       console.log('update marker', { bucket, Marker })
-      s3markerRepo.upsert(bucket, Marker)
+      await s3markerRepo.upsert(bucket, Marker)
     }
   }
 }
@@ -111,19 +111,19 @@ async function scanS3Prefix(
         const releases = (await parseDdexXml(source, xmlUrl, xml)) || []
 
         // seed resized images so server doesn't have to do at request time
-        for (const release of releases) {
-          for (const img of release.images) {
-            if (img.fileName && img.filePath) {
-              await readAssetWithCaching(
-                xmlUrl,
-                img.filePath,
-                img.fileName,
-                '200',
-                true
-              )
-            }
-          }
-        }
+        // for (const release of releases) {
+        //   for (const img of release.images) {
+        //     if (img.fileName && img.filePath) {
+        //       await readAssetWithCaching(
+        //         xmlUrl,
+        //         img.filePath,
+        //         img.fileName,
+        //         '200',
+        //         true
+        //       )
+        //     }
+        //   }
+        // }
       }
     }
   }

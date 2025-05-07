@@ -4,9 +4,9 @@ services:
     environment:
       POSTGRES_PASSWORD: example
     ports:
-      - 40111:5432
+      - 127.0.0.1:40111:5432
 
   adminer:
     image: adminer
     ports:
-      - 40222:8080
+      - 127.0.0.1:40222:8080

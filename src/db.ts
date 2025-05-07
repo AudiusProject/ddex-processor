@@ -6,6 +6,7 @@ import { dataDir } from './sources'
 
 export { assetRepo } from './db/assetRepo'
 export { releaseRepo } from './db/releaseRepo'
+export { s3markerRepo } from './db/s3markerRepo'
 export { userRepo } from './db/userRepo'
 export { xmlRepo } from './db/xmlRepo'
 
@@ -78,8 +79,8 @@ create table if not exists s3markers (
     val text not null
   );
   `,
-  sql`alter table releases add column releaseType text;`,
-  sql`alter table releases add column releaseDate text;`,
+  sql`alter table releases add column IF NOT EXISTS releaseType text;`,
+  sql`alter table releases add column IF NOT EXISTS releaseDate text;`,
   sql`
     create table if not exists assets (
       source text not null,
@@ -174,22 +175,6 @@ export type S3MarkerRow = {
 export type KVRow = {
   key: string
   val: string
-}
-
-//
-// s3cursor repo
-//
-export const s3markerRepo = {
-  get(bucket: string) {
-    const markerRow = db.get<S3MarkerRow>(
-      sql`select marker from s3markers where bucket = ${bucket}`
-    )
-    return markerRow?.marker || ''
-  },
-
-  upsert(bucket: string, marker: string) {
-    db.run(sql`replace into s3markers values (${bucket}, ${marker})`)
-  },
 }
 
 //

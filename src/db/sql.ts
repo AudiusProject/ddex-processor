@@ -4,6 +4,7 @@ export const sql = postgres({
   port: 40111,
   user: 'postgres',
   pass: 'example',
+  database: 'ddex1',
 })
 
 //

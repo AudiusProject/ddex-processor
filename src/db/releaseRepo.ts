@@ -2,9 +2,9 @@
 // release repo
 //
 
-import { ReleaseProcessingStatus, ReleaseRow } from '../db'
+import { assetRepo, ReleaseProcessingStatus, ReleaseRow } from '../db'
 import { DDEXRelease, DDEXReleaseIds } from '../parseDelivery'
-import { ifdef, pgInsert, pgUpsert, sql } from './sql'
+import { ifdef, pgUpsert, sql } from './sql'
 
 type FindReleaseParams = {
   pendingPublish?: boolean
@@ -37,9 +37,9 @@ export const releaseRepo = {
   },
 
   async stats() {
-    const stats =
+    const stats: StatsRow[] =
       await sql`select source, count(*) count from releases group by 1`
-    return stats[0] as StatsRow
+    return stats
   },
 
   async all(params?: FindReleaseParams) {
@@ -152,7 +152,7 @@ export const releaseRepo = {
     // so if an update comes in we can still resolve the original file
     for (const r of [...release.soundRecordings, ...release.images]) {
       if (r.ref && r.filePath && r.fileName) {
-        await pgInsert('assets', {
+        await assetRepo.upsert({
           source: source,
           releaseId: key,
           ref: r.ref,

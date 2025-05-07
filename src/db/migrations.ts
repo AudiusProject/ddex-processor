@@ -61,4 +61,11 @@ export async function pgMigrate() {
     primary key ("apiKey", "id")
   );
   `
+
+  await sql`
+  create table if not exists "s3markers" (
+    "bucket" text primary key,
+    "marker" text not null
+  );
+  `
 }

@@ -9,7 +9,7 @@ import { sources } from '../sources'
 
 export async function clmReport() {
   const markerKey = 'report_clm'
-  let marker = s3markerRepo.get(markerKey) || '2024-10-26'
+  let marker = (await s3markerRepo.get(markerKey)) || '2024-10-26'
 
   // don't run twice on same day
   const todayDate = new Date().toISOString().substring(0, 10)
@@ -23,9 +23,9 @@ export async function clmReport() {
 
   const releases: ReleaseRow[] = await sql`
     select * from releases
-    where releaseType != 'TrackRelease'
-    and messageTimestamp > ${marker}
-    order by messageTimestamp asc
+    where "releaseType" != 'TrackRelease'
+    and "messageTimestamp" > ${marker}
+    order by "messageTimestamp" asc
   `
   if (releases.length == 0) {
     console.log('no new CLM releases')
@@ -96,7 +96,7 @@ export async function clmReport() {
 
   // update marker
   console.log(`Update marker ${markerKey}=${marker}`)
-  s3markerRepo.upsert(markerKey, marker)
+  await s3markerRepo.upsert(markerKey, marker)
 }
 
 function padToTwoDigits(num: number) {

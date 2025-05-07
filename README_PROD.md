@@ -1,11 +1,12 @@
 # Production Setup
 
-Provision a Ubuntu server.  Makefile assumes
+Provision a Ubuntu server. Makefile assumes
 
 ### Install stuff
 
-* Install [nodejs](https://deb.nodesource.com/)
-* Setup a [Cloudflare Tunne](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-local-tunnel/)
+- Install [nodejs](https://deb.nodesource.com/)
+- Setup a [Cloudflare Tunne](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-local-tunnel/)
+- Install [docker](https://docs.docker.com/engine/install/ubuntu/)
 
 ### Configure tunnel
 
@@ -34,9 +35,9 @@ If the route setup fails, run `cloudflared tunnel list`, get the UUID and go to 
 
 ### Configure sources
 
-* Create an AWS bucket + AWS keypair with access to said bucket.
-* Create an Audius app in [account settings](https://audius.co/settings).
-* `cp sources.example.json data/sources.json` and populate values.
+- Create an AWS bucket + AWS keypair with access to said bucket.
+- Create an Audius app in [account settings](https://audius.co/settings).
+- `cp sources.example.json data/sources.json` and populate values.
 
 ### Configure env
 
@@ -72,5 +73,3 @@ Any time you change `ecosystem.config.js` you should stop + delete old entries a
 ```bash
 make
 ```
-
-

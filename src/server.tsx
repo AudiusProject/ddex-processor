@@ -16,7 +16,6 @@ import {
   ReleaseProcessingStatus,
   assetRepo,
   isClearedRepo,
-  kvRepo,
   releaseRepo,
   userRepo,
   xmlRepo,
@@ -30,17 +29,20 @@ import { sources } from './sources'
 import { parseBool } from './util'
 
 // read env
-const { NODE_ENV, DDEX_URL } = process.env
+const { NODE_ENV, DDEX_URL, COOKIE_SECRET } = process.env
 const ADMIN_HANDLES = (process.env.ADMIN_HANDLES || '')
   .split(',')
   .map((h) => h.toLowerCase().trim())
 
 // validate ENV
 if (!DDEX_URL) console.warn('DDEX_URL not defined')
+if (!COOKIE_SECRET) {
+  console.warn('COOKIE_SECRET env var missing')
+  process.exit(1)
+}
 
 // globals
 const COOKIE_NAME = 'audiusUser'
-const COOKIE_SECRET = kvRepo.getCookieSecret()
 
 const IS_PROD = NODE_ENV == 'production'
 const API_HOST = IS_PROD
@@ -147,11 +149,12 @@ app.get('/auth/redirect', async (c) => {
     }
 
     // upsert user record
-    userRepo.upsert({
+    await userRepo.upsert({
       apiKey: payload.apiKey,
       id: payload.userId,
       handle: payload.handle,
       name: payload.name,
+      createdAt: new Date(),
     })
 
     // after user upsert, rescan for matches
@@ -200,14 +203,14 @@ app.use('*', async (c, next) => {
   await next()
 })
 
-app.get('/releases', (c) => {
+app.get('/releases', async (c) => {
   const queryCleared = c.req.query('cleared') == 'on'
   const querySearch = c.req.query('search')
   const queryStatus = c.req.query('status')
   const querySource = c.req.query('source')
   const limit = parseInt(c.req.query('limit') || '100')
   const offset = parseInt(c.req.query('offset') || '0')
-  const rows = releaseRepo.all({
+  const rows = await releaseRepo.all({
     status: queryStatus,
     source: querySource,
     pendingPublish: parseBool(c.req.query('pendingPublish')),
@@ -232,7 +235,7 @@ app.get('/releases', (c) => {
     if (!val) return
     return html`<a
       class="plain contrast"
-      href="${withQueryParam('search', `"${val}"`)}"
+      href="${withQueryParam('search', `${val}`)}"
     >
       ${val}
     </a>`
@@ -320,8 +323,8 @@ app.get('/releases', (c) => {
                 html` <tr>
                   <td style="min-width: 80px;">
                     <img
-                      src="/release/${row.source}/${row.key}/${row._parsed
-                        ?.images[0]?.ref}/200"
+                      src="/release/${row.source}/${row.key}/${row.images[0]
+                        ?.ref}/200"
                       width="80"
                       height="80"
                     />
@@ -331,39 +334,37 @@ app.get('/releases', (c) => {
                       href="/releases/${encodeURIComponent(row.key)}"
                       style="font-weight: bold; text-decoration: none;"
                     >
-                      ${row._parsed?.title}
+                      ${row.title}
                     </a>
                     <div>
-                      ${row._parsed?.audiusUser
-                        ? audiusUserLink(row._parsed?.audiusUser)
-                        : searchLink(row._parsed?.artists[0]?.name)}
+                      ${row.audiusUser
+                        ? audiusUserLink(row.audiusUser)
+                        : searchLink(row.artists[0]?.name)}
                     </div>
                     <small>
                       <em
                         title="${row.messageTimestamp}"
                         class="pico-color-grey-500"
                       >
-                        ${searchLink(row._parsed?.labelName)} via ${row.source}
+                        ${searchLink(row.labelName)} via ${row.source}
                       </em>
                     </small>
                   </td>
 
                   <td>
-                    ${searchLink(row._parsed?.genre)}
+                    ${searchLink(row.genre)}
                     <br />
-                    <small>${searchLink(row._parsed?.subGenre)}</small>
+                    <small>${searchLink(row.subGenre)}</small>
                   </td>
                   <td>
                     ${row.releaseType}
-                    <small> (${row._parsed?.soundRecordings.length})</small>
+                    <small> (${row.soundRecordings.length})</small>
                     <br />
                     <small>${row.releaseDate}</small>
                   </td>
                   <td>
                     ${row.status}<br />
-                    ${row._parsed?.problems?.map(
-                      (p) => html`<small>${p} </small>`
-                    )}
+                    ${row.problems?.map((p) => html`<small>${p} </small>`)}
                   </td>
                   <td>
                     ${row.numCleared != undefined &&
@@ -371,11 +372,10 @@ app.get('/releases', (c) => {
                       <b
                         title="${row.numCleared} cleared
 ${row.numNotCleared} not cleared
-${row._parsed?.soundRecordings.length} tracks"
+${row.soundRecordings.length} tracks"
                       >
                         ${(
-                          (row.numCleared /
-                            (row._parsed?.soundRecordings.length || 1)) *
+                          (row.numCleared / (row.soundRecordings.length || 1)) *
                           100
                         ).toFixed() + '%'}
                       </b>
@@ -411,9 +411,9 @@ ${row._parsed?.soundRecordings.length} tracks"
   )
 })
 
-app.get('/releases/:key', (c) => {
+app.get('/releases/:key', async (c) => {
   const releaseId = c.req.param('key')
-  const row = releaseRepo.get(releaseId)
+  const row = await releaseRepo.get(releaseId)
   if (!row) return c.json({ error: 'not found' }, 404)
   if (c.req.query('json') != undefined) {
     return c.json(row)
@@ -422,7 +422,7 @@ app.get('/releases/:key', (c) => {
   function searchLink(val?: string) {
     if (!val) return
     const u = new URL('/releases', c.req.url)
-    u.searchParams.set('search', `"${val}"`)
+    u.searchParams.set('search', `${val}`)
     return html`<a class="plain contrast" href="${u.toString()}"> ${val} </a>`
   }
 
@@ -434,10 +434,10 @@ app.get('/releases/:key', (c) => {
     </tr>`
   }
 
-  const parsedRelease = row._parsed!
-  const clears = isClearedRepo.listForRelease(releaseId)
+  const parsedRelease = row
+  const clears = await isClearedRepo.listForRelease(releaseId)
 
-  const allUsers = userRepo.all()
+  const allUsers = await userRepo.all()
 
   const associatedUser = parsedRelease.audiusUser
     ? allUsers.find((u) => u.id == parsedRelease.audiusUser)
@@ -521,7 +521,7 @@ app.get('/releases/:key', (c) => {
               ${debugLinks(row.xmlUrl, row.key)}
               <hr />
               ${row.status}<br />
-              ${row._parsed?.problems?.map((p) => html`<small>${p} </small>`)}
+              ${row.problems?.map((p) => html`<small>${p} </small>`)}
               <hr />
             </div>
 
@@ -636,12 +636,12 @@ app.get('/releases/:key', (c) => {
 })
 
 app.get('/stats', async (c) => {
-  const stats = releaseRepo.stats()
+  const stats = await releaseRepo.stats()
   return c.json(stats)
 })
 
 app.get('/history/:key', async (c) => {
-  const xmls = xmlRepo.find(c.req.param('key'))
+  const xmls = await xmlRepo.find(c.req.param('key'))
   return c.html(
     Layout(html`
       <table>
@@ -677,7 +677,7 @@ app.get('/release/:source/:key/:ref/:size?', async (c) => {
   const ref = c.req.param('ref')
   const size = c.req.param('size')
 
-  const asset = assetRepo.get(source, key, ref)
+  const asset = await assetRepo.get(source, key, ref)
   if (!asset) return c.json({ error: 'not found' }, 404)
 
   const ok = await readAssetWithCaching(
@@ -702,7 +702,7 @@ app.get('/release/:source/:key/:ref/:size?', async (c) => {
 
 app.get('/xmls/:xmlUrl', async (c) => {
   const xmlUrl = c.req.param('xmlUrl')
-  const row = xmlRepo.get(xmlUrl)
+  const row = await xmlRepo.get(xmlUrl)
   if (!row) return c.json({ error: 'not found' }, 404)
 
   const source = sources.findByXmlUrl(xmlUrl)
@@ -719,11 +719,11 @@ app.get('/xmls/:xmlUrl', async (c) => {
 
   // parse=true will parse the xml to internal representation
   if (parseBool(c.req.query('parse'))) {
-    const parsed = parseDdexXml(
+    const parsed = (await parseDdexXml(
       row.source,
       row.xmlUrl,
       xmlText
-    ) as DDEXRelease[]
+    )) as DDEXRelease[]
 
     // parse=sdk will convert internal representation to SDK friendly format
     if (c.req.query('parse') == 'sdk') {
@@ -751,21 +751,20 @@ app.get('/xmls/:xmlUrl', async (c) => {
   return c.body(xmlText)
 })
 
-app.get('/releases/:key/json', (c) => {
-  const row = releaseRepo.get(c.req.param('key'))
+app.get('/releases/:key/json', async (c) => {
+  const row = await releaseRepo.get(c.req.param('key'))
   if (!row) return c.json({ error: 'not found' }, 404)
-  c.header('Content-Type', 'application/json')
-  return c.body(row?.json)
+  return c.json(row)
 })
 
-app.get('/releases/:key/error', (c) => {
-  const row = releaseRepo.get(c.req.param('key'))
+app.get('/releases/:key/error', async (c) => {
+  const row = await releaseRepo.get(c.req.param('key'))
   if (!row) return c.json({ error: 'not found' }, 404)
   return c.text(row.lastPublishError)
 })
 
-app.get('/users', (c) => {
-  const users = userRepo.all()
+app.get('/users', async (c) => {
+  const users = await userRepo.all()
   return c.html(
     Layout(
       html`<h1>Users</h1>
@@ -805,9 +804,9 @@ app.get('/users', (c) => {
 
 app.get('/associate/:releaseId', async (c) => {
   const releaseId = c.req.param('releaseId')
-  const releaseRow = releaseRepo.get(releaseId)
-  const release = releaseRow?._parsed
-  const user = userRepo.findOne({ id: c.req.query('userId') })
+  const releaseRow = await releaseRepo.get(releaseId)
+  const release = releaseRow
+  const user = await userRepo.findById(c.req.query('userId')!)
   const source = sources.findByName(releaseRow?.source || '')
   if (!releaseRow || !user || !source || !release) {
     return c.text('not found', 404)
@@ -815,21 +814,24 @@ app.get('/associate/:releaseId', async (c) => {
 
   release.audiusUser = user.id
 
-  releaseRepo.upsert(
+  await releaseRepo.upsert(
     releaseRow.source,
     releaseRow.xmlUrl,
     releaseRow.messageTimestamp,
     release
   )
 
-  releaseRepo.markPrependArtist(releaseId, c.req.query('prependArtist') == 'on')
+  await releaseRepo.markPrependArtist(
+    releaseId,
+    c.req.query('prependArtist') == 'on'
+  )
   return c.redirect(`/releases/${releaseId}`)
 })
 
 app.post('/publish/:releaseId', async (c) => {
   const releaseId = c.req.param('releaseId')
-  const releaseRow = releaseRepo.get(releaseId)
-  const release = releaseRow?._parsed
+  const releaseRow = await releaseRepo.get(releaseId)
+  const release = releaseRow
   const source = sources.findByName(releaseRow?.source || '')
   if (!releaseRow || !source || !release) {
     return c.text('not found', 404)
@@ -939,8 +941,8 @@ async function getAudiusUser(c: Context) {
   return me
 }
 
-function audiusUserLink(id: string) {
-  const user = userRepo.findOne({ id })
+async function audiusUserLink(id: string) {
+  const user = await userRepo.findById(id)
   if (!user) {
     return html`User ${id} not in database`
   }

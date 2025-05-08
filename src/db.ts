@@ -32,30 +32,23 @@ export enum ReleaseProcessingStatus {
   Deleted = 'Deleted',
 }
 
-export type ReleaseRow = {
+export type ReleaseRow = DDEXRelease & {
   source: string
   key: string
   xmlUrl: string
   messageTimestamp: string
-  releaseType: string
-  releaseDate: string
-  json: string
   status: ReleaseProcessingStatus
   createdAt: string
   numCleared: number
   numNotCleared: number
   prependArtist: string
-
   entityType?: 'track' | 'album'
   entityId?: string
   blockHash?: string
   blockNumber?: number
   publishedAt?: string
-
-  publishErrorCount: number
   lastPublishError: string
-
-  _parsed?: DDEXRelease
+  publishErrorCount: number
 }
 
 export type S3MarkerRow = {

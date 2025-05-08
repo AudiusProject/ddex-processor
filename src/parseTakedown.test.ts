@@ -34,10 +34,10 @@ test('crud', async () => {
   {
     await parseDdexXmlFile(source, 'fixtures/01_delivery.xml')
     const rr = (await releaseRepo.get(grid))!
-    expect(rr._parsed?.labelName).toBe('Iron Crown Music')
-    expect(rr._parsed?.soundRecordings[0].title).toBe('Example Song')
-    expect(rr._parsed?.soundRecordings[0].labelName).toBe('Label Name, Inc.')
-    expect(rr._parsed?.soundRecordings[0].duration).toBe(225)
+    expect(rr.labelName).toBe('Iron Crown Music')
+    expect(rr.soundRecordings[0].title).toBe('Example Song')
+    expect(rr.soundRecordings[0].labelName).toBe('Label Name, Inc.')
+    expect(rr.soundRecordings[0].duration).toBe(225)
     expect(rr.status).toBe(ReleaseProcessingStatus.PublishPending)
     expect(rr.source).toBe('crudTest')
   }
@@ -52,7 +52,7 @@ test('crud', async () => {
   // load 02 update
   await parseDdexXmlFile(source, 'fixtures/02_update.xml')
   const rr = (await releaseRepo.get(grid))!
-  expect(rr._parsed?.soundRecordings[0].title).toBe('Updated Example Song')
+  expect(rr.soundRecordings[0].title).toBe('Updated Example Song')
   expect(rr.status).toBe(ReleaseProcessingStatus.PublishPending)
 
   // simulate publish
@@ -65,7 +65,7 @@ test('crud', async () => {
   {
     await parseDdexXmlFile(source, 'fixtures/01_delivery.xml')
     const rr = (await releaseRepo.get(grid))!
-    expect(rr._parsed?.soundRecordings[0].title).toBe('Updated Example Song')
+    expect(rr.soundRecordings[0].title).toBe('Updated Example Song')
     expect(rr.status).toBe(ReleaseProcessingStatus.Published)
   }
 
@@ -108,7 +108,7 @@ test('crud', async () => {
   {
     await parseDdexXmlFile(source, 'fixtures/04_no_deal.xml')
     const rr = (await releaseRepo.get(grid))!
-    expect(rr._parsed?.soundRecordings[0].title).toBe('Updated Example Song')
+    expect(rr.soundRecordings[0].title).toBe('Updated Example Song')
     expect(rr.status).toBe(ReleaseProcessingStatus.DeletePending)
   }
 })

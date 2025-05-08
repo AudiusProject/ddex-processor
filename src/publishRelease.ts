@@ -24,7 +24,7 @@ export async function publishValidPendingReleases() {
     if (!source) {
       continue
     }
-    const parsed = row._parsed!
+    const parsed = row
 
     if (row.status == ReleaseProcessingStatus.DeletePending) {
       // delete
@@ -330,7 +330,7 @@ export async function updateAlbum(
 
 export async function deleteRelease(source: SourceConfig, r: ReleaseRow) {
   const sdk = getSdk(source)
-  const userId = r._parsed!.audiusUser!
+  const userId = r.audiusUser!
   const entityId = r.entityId
 
   // if not yet published to audius, mark internal releases row as deleted

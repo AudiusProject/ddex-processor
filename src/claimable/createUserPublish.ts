@@ -10,7 +10,7 @@ import { getHedgehog } from './hedgehog'
 
 export async function publishToClaimableAccount(releaseId: string) {
   const releaseRow = await releaseRepo.get(releaseId)
-  const release = releaseRow?._parsed
+  const release = releaseRow
   if (!releaseRow || !release) {
     throw new Error(`release not found: ${releaseId}`)
   }

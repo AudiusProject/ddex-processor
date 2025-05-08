@@ -4,6 +4,7 @@
 
 import { assetRepo, ReleaseProcessingStatus, ReleaseRow } from '../db'
 import { DDEXRelease, DDEXReleaseIds } from '../parseDelivery'
+import { omitEmpty } from '../util'
 import { ifdef, pgUpdate, pgUpsert, sql } from './sql'
 
 type FindReleaseParams = {
@@ -64,7 +65,21 @@ export const releaseRepo = {
 
       ${ifdef(params.source, sql` and "source" = ${params.source!} `)}
 
-      ${ifdef(params.search, sql` and "json"::text like '%' || ${params.search!} || '%' `)}
+      ${ifdef(
+        params.search,
+        sql`
+        and (
+          "artists"::text like '%' || ${params.search!} || '%'
+          OR "contributors"::text like '%' || ${params.search!} || '%'
+          OR "indirectContributors"::text like '%' || ${params.search!} || '%'
+          OR "title" ilike '%' || ${params.search!} || '%'
+          OR "labelName" ilike '%' || ${params.search!} || '%'
+          OR "genre" ilike '%' || ${params.search!} || '%'
+          OR "subGenre" ilike '%' || ${params.search!} || '%'
+          OR "source" like '%' || ${params.search!} || '%'
+        )
+      `
+      )}
 
       ${ifdef(params.cleared, sql` and "numCleared" > 0 `)}
 
@@ -74,25 +89,13 @@ export const releaseRepo = {
       ${ifdef(params.offset, sql` offset ${params.offset!} `)}
     `
 
-    for (const row of rows) {
-      if (row.json) row._parsed = JSON.parse(row.json)
-    }
     return rows
   },
-
-  // rawSelect(q: Query) {
-  //   const rows = db.all<ReleaseRow>(q)
-  //   for (const row of rows) {
-  //     if (row.json) row._parsed = JSON.parse(row.json)
-  //   }
-  //   return rows
-  // },
 
   async get(key: string) {
     const rows = await sql`select * from releases where "key" = ${key}`
     const row = rows[0]
     if (!row) return
-    if (row.json) row._parsed = JSON.parse(row.json)
     return row as ReleaseRow
   },
 
@@ -129,7 +132,7 @@ export const releaseRepo = {
       }
     }
 
-    const json = JSON.stringify(release)
+    const json = release
 
     // if same xmlUrl + json, skip
     // may want some smarter json compare here
@@ -167,16 +170,14 @@ export const releaseRepo = {
       source,
       key,
       status,
-      ref: release.ref,
-      releaseType: release.releaseType,
-      releaseDate: release.releaseDate,
       xmlUrl,
       messageTimestamp,
-      json,
       updatedAt: new Date().toISOString(),
+      json,
+      ...release,
     } as Partial<ReleaseRow>
 
-    await pgUpsert('releases', 'key', data)
+    await pgUpsert('releases', 'key', omitEmpty(data))
   },
 
   async markPrependArtist(key: string, prependArtist: boolean) {

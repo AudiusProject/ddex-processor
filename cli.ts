@@ -49,7 +49,7 @@ program
   )
   .action(async (releaseId, userId, opts) => {
     const releaseRow = await releaseRepo.get(releaseId)
-    const release = releaseRow?._parsed
+    const release = releaseRow!
     if (!releaseRow || !release) {
       throw new Error(`release not found: ${releaseId}`)
     }
@@ -148,7 +148,7 @@ program
       process.exit(1)
     }
 
-    const release = releaseRow._parsed!
+    const release = releaseRow
     const userId = release.audiusUser
     if (!releaseRow.entityId) {
       console.warn(`release id ${releaseId} has no entityId`)
@@ -260,7 +260,7 @@ program
     const trackUpdates = prepareTrackMetadatas(
       sourceConfig,
       releaseRow,
-      releaseRow._parsed!
+      releaseRow
     )
 
     for (const sdkTrack of sdkAlbum.data![0].tracks) {

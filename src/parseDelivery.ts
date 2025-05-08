@@ -62,7 +62,7 @@ type ReleaseAndSoundRecordingSharedFields = {
   labelName: string
 }
 
-type CopyrightPair = {
+export type CopyrightPair = {
   text: string
   year: string
 }

@@ -11,6 +11,7 @@
     "dev": "tsx watch cli.ts server",
     "dev:server": "tsx watch cli.ts server",
     "build": "",
+    "tsc": "tsc",
     "test": "tsc && vitest run",
     "test:watch": "vitest"
   },
@@ -18,7 +19,7 @@
   "author": "Audius",
   "dependencies": {
     "@audius/hedgehog": "^3.0.0-alpha.1",
-    "@audius/sdk": "^8.0.0",
+    "@audius/sdk": "^9.0.0",
     "@aws-sdk/client-s3": "3.658.1",
     "@aws-sdk/credential-provider-ini": "3.658.1",
     "@hono/node-server": "^1.13.1",

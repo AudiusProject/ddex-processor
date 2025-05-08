@@ -34,8 +34,7 @@ export async function clmReport() {
 
   const rows = releases.flatMap((releaseRow) => {
     marker = releaseRow.messageTimestamp
-    releaseRow._parsed = JSON.parse(releaseRow.json)
-    const r = releaseRow._parsed!
+    const r = releaseRow
     return r.soundRecordings.map((track) => {
       if (!track.isrc) {
         throw new Error(

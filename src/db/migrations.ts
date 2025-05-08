@@ -83,18 +83,30 @@ const steps = [
   );
   `,
 
-  sql`
-  create table if not exists "lsrLog" (
-    "file" text primary key,
-    "ts" timestamptz not null
-  );
-  `,
+  sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "ref" text;`,
+  sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "genre" text;`,
+  sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "subGenre" text;`,
+  sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "labelName" text;`,
+  sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "title" text;`,
+  sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "subTitle" text;`,
+  sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "artists" jsonb;`,
+  sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "contributors" jsonb;`,
+  sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "indirectContributors" jsonb;`,
 
-  sql`create table if not exists cats (
-    "name" text primary key,
-    "breed" text,
-    "good_cat" boolean
-  )`,
+  sql`
+  ALTER TABLE releases
+  ADD COLUMN IF NOT EXISTS "releaseIds" jsonb,
+  ADD COLUMN IF NOT EXISTS "isMainRelease" boolean,
+  ADD COLUMN IF NOT EXISTS "audiusGenre" text,
+  ADD COLUMN IF NOT EXISTS "audiusUser" text,
+  ADD COLUMN IF NOT EXISTS "problems" jsonb,
+  ADD COLUMN IF NOT EXISTS "soundRecordings" jsonb,
+  ADD COLUMN IF NOT EXISTS "images" jsonb,
+  ADD COLUMN IF NOT EXISTS "deals" jsonb,
+  ADD COLUMN IF NOT EXISTS "copyrightLine" jsonb,
+  ADD COLUMN IF NOT EXISTS "producerCopyrightLine" jsonb,
+  ADD COLUMN IF NOT EXISTS "parentalWarningType" text;
+  `,
 ]
 
 // poor man's migrate

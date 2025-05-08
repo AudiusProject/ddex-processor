@@ -323,8 +323,8 @@ app.get('/releases', async (c) => {
                 html` <tr>
                   <td style="min-width: 80px;">
                     <img
-                      src="/release/${row.source}/${row.key}/${row._parsed
-                        ?.images[0]?.ref}/200"
+                      src="/release/${row.source}/${row.key}/${row.images[0]
+                        ?.ref}/200"
                       width="80"
                       height="80"
                     />
@@ -334,39 +334,37 @@ app.get('/releases', async (c) => {
                       href="/releases/${encodeURIComponent(row.key)}"
                       style="font-weight: bold; text-decoration: none;"
                     >
-                      ${row._parsed?.title}
+                      ${row.title}
                     </a>
                     <div>
-                      ${row._parsed?.audiusUser
-                        ? audiusUserLink(row._parsed?.audiusUser)
-                        : searchLink(row._parsed?.artists[0]?.name)}
+                      ${row.audiusUser
+                        ? audiusUserLink(row.audiusUser)
+                        : searchLink(row.artists[0]?.name)}
                     </div>
                     <small>
                       <em
                         title="${row.messageTimestamp}"
                         class="pico-color-grey-500"
                       >
-                        ${searchLink(row._parsed?.labelName)} via ${row.source}
+                        ${searchLink(row.labelName)} via ${row.source}
                       </em>
                     </small>
                   </td>
 
                   <td>
-                    ${searchLink(row._parsed?.genre)}
+                    ${searchLink(row.genre)}
                     <br />
-                    <small>${searchLink(row._parsed?.subGenre)}</small>
+                    <small>${searchLink(row.subGenre)}</small>
                   </td>
                   <td>
                     ${row.releaseType}
-                    <small> (${row._parsed?.soundRecordings.length})</small>
+                    <small> (${row.soundRecordings.length})</small>
                     <br />
                     <small>${row.releaseDate}</small>
                   </td>
                   <td>
                     ${row.status}<br />
-                    ${row._parsed?.problems?.map(
-                      (p) => html`<small>${p} </small>`
-                    )}
+                    ${row.problems?.map((p) => html`<small>${p} </small>`)}
                   </td>
                   <td>
                     ${row.numCleared != undefined &&
@@ -374,11 +372,10 @@ app.get('/releases', async (c) => {
                       <b
                         title="${row.numCleared} cleared
 ${row.numNotCleared} not cleared
-${row._parsed?.soundRecordings.length} tracks"
+${row.soundRecordings.length} tracks"
                       >
                         ${(
-                          (row.numCleared /
-                            (row._parsed?.soundRecordings.length || 1)) *
+                          (row.numCleared / (row.soundRecordings.length || 1)) *
                           100
                         ).toFixed() + '%'}
                       </b>
@@ -437,7 +434,7 @@ app.get('/releases/:key', async (c) => {
     </tr>`
   }
 
-  const parsedRelease = row._parsed!
+  const parsedRelease = row
   const clears = await isClearedRepo.listForRelease(releaseId)
 
   const allUsers = await userRepo.all()
@@ -524,7 +521,7 @@ app.get('/releases/:key', async (c) => {
               ${debugLinks(row.xmlUrl, row.key)}
               <hr />
               ${row.status}<br />
-              ${row._parsed?.problems?.map((p) => html`<small>${p} </small>`)}
+              ${row.problems?.map((p) => html`<small>${p} </small>`)}
               <hr />
             </div>
 
@@ -757,8 +754,7 @@ app.get('/xmls/:xmlUrl', async (c) => {
 app.get('/releases/:key/json', async (c) => {
   const row = await releaseRepo.get(c.req.param('key'))
   if (!row) return c.json({ error: 'not found' }, 404)
-  c.header('Content-Type', 'application/json')
-  return c.body(row?.json)
+  return c.json(row)
 })
 
 app.get('/releases/:key/error', async (c) => {
@@ -809,7 +805,7 @@ app.get('/users', async (c) => {
 app.get('/associate/:releaseId', async (c) => {
   const releaseId = c.req.param('releaseId')
   const releaseRow = await releaseRepo.get(releaseId)
-  const release = releaseRow?._parsed
+  const release = releaseRow
   const user = await userRepo.findById(c.req.query('userId')!)
   const source = sources.findByName(releaseRow?.source || '')
   if (!releaseRow || !user || !source || !release) {
@@ -835,7 +831,7 @@ app.get('/associate/:releaseId', async (c) => {
 app.post('/publish/:releaseId', async (c) => {
   const releaseId = c.req.param('releaseId')
   const releaseRow = await releaseRepo.get(releaseId)
-  const release = releaseRow?._parsed
+  const release = releaseRow
   const source = sources.findByName(releaseRow?.source || '')
   if (!releaseRow || !source || !release) {
     return c.text('not found', 404)

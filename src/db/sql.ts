@@ -11,26 +11,6 @@ export const sql = postgres({
 //
 //
 
-export async function pgInsert(table: string, data: Record<string, any>) {
-  await sql`insert into ${sql.unsafe(table)} ${sql(data)} on conflict do nothing`
-}
-
-export async function pgUpsert(
-  table: string,
-  pkField: string,
-  data: Record<string, any>
-) {
-  await sql.begin(async (tx) => {
-    const [prior] =
-      await tx`select * from ${tx(table)} where ${tx(pkField)} = ${data[pkField]}`
-
-    if (prior) data = Object.assign(prior, data)
-
-    await tx`delete from ${tx(table)} where ${tx(pkField)} = ${data[pkField]}`
-    await tx`insert into ${sql.unsafe(table)} ${sql(data)}`
-  })
-}
-
 export async function pgUpdate(
   table: string,
   pkField: string,
@@ -39,16 +19,20 @@ export async function pgUpdate(
   await sql`update ${sql.unsafe(table)} set ${sql(data)} where ${sql.unsafe(pkField)} = ${data[pkField]}`
 }
 
+export async function pgUpsert(
+  table: string,
+  pkField: string,
+  data: Record<string, any>
+) {
+  await sql`
+    insert into ${sql(table)} ${sql(data)}
+    ON CONFLICT (${sql(pkField)}) DO UPDATE
+    SET ${Object.keys(data).map(
+      (x, i) => sql`${i ? sql`,` : sql``}${sql(x)} = excluded.${sql(x)}`
+    )}
+  `
+}
+
 export function ifdef(cond: any, stmt: any) {
   return cond ? stmt : sql``
 }
-
-//
-// shutdown
-process.once('SIGTERM', () => {
-  sql.end()
-})
-
-process.once('SIGINT', () => {
-  sql.end()
-})

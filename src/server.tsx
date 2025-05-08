@@ -16,7 +16,6 @@ import {
   ReleaseProcessingStatus,
   assetRepo,
   isClearedRepo,
-  kvRepo,
   releaseRepo,
   userRepo,
   xmlRepo,
@@ -30,17 +29,20 @@ import { sources } from './sources'
 import { parseBool } from './util'
 
 // read env
-const { NODE_ENV, DDEX_URL } = process.env
+const { NODE_ENV, DDEX_URL, COOKIE_SECRET } = process.env
 const ADMIN_HANDLES = (process.env.ADMIN_HANDLES || '')
   .split(',')
   .map((h) => h.toLowerCase().trim())
 
 // validate ENV
 if (!DDEX_URL) console.warn('DDEX_URL not defined')
+if (!COOKIE_SECRET) {
+  console.warn('COOKIE_SECRET env var missing')
+  process.exit(1)
+}
 
 // globals
 const COOKIE_NAME = 'audiusUser'
-const COOKIE_SECRET = kvRepo.getCookieSecret()
 
 const IS_PROD = NODE_ENV == 'production'
 const API_HOST = IS_PROD
@@ -423,7 +425,7 @@ app.get('/releases/:key', async (c) => {
   function searchLink(val?: string) {
     if (!val) return
     const u = new URL('/releases', c.req.url)
-    u.searchParams.set('search', `"${val}"`)
+    u.searchParams.set('search', `${val}`)
     return html`<a class="plain contrast" href="${u.toString()}"> ${val} </a>`
   }
 
@@ -436,7 +438,7 @@ app.get('/releases/:key', async (c) => {
   }
 
   const parsedRelease = row._parsed!
-  const clears = isClearedRepo.listForRelease(releaseId)
+  const clears = await isClearedRepo.listForRelease(releaseId)
 
   const allUsers = await userRepo.all()
 

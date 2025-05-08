@@ -44,6 +44,7 @@ If the route setup fails, run `cloudflared tunnel list`, get the UUID and go to 
 Create a `.env` file like:
 
 ```bash
+COOKIE_SECRET='openssl rand -hex 16'
 NODE_ENV='production'
 DDEX_URL='https://ddex.example.com'
 ADMIN_HANDLES='user1,user2'

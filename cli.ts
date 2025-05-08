@@ -316,6 +316,6 @@ async function startWorker() {
     // want to have human in loop to clean up orphans tracks when that happens.
     // await publishValidPendingReleases()
 
-    await sleep(10 * 60_000)
+    // await sleep(5 * 60_000)
   }
 }

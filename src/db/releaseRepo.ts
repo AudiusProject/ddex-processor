@@ -4,7 +4,7 @@
 
 import { assetRepo, ReleaseProcessingStatus, ReleaseRow } from '../db'
 import { DDEXRelease, DDEXReleaseIds } from '../parseDelivery'
-import { ifdef, pgUpsert, sql } from './sql'
+import { ifdef, pgUpdate, pgUpsert, sql } from './sql'
 
 type FindReleaseParams = {
   pendingPublish?: boolean
@@ -97,7 +97,7 @@ export const releaseRepo = {
   },
 
   async update(r: Partial<ReleaseRow>) {
-    await pgUpsert('releases', 'key', r)
+    await pgUpdate('releases', 'key', r)
   },
 
   upsert: async (

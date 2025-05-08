@@ -26,4 +26,4 @@ adminer::
 	open http://localhost:40222/?pgsql=db&username=postgres
 
 psql::
-	psql postgresql://postgres:example@localhost:40111/postgres
+	psql postgresql://postgres:example@localhost:40111/ddex1

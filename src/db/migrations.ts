@@ -1,5 +1,6 @@
 import { sql } from './sql'
 
+// todo: just do each item once
 export async function pgMigrate() {
   await sql`
   CREATE TABLE IF NOT EXISTS xmls (
@@ -66,6 +67,23 @@ export async function pgMigrate() {
   create table if not exists "s3markers" (
     "bucket" text primary key,
     "marker" text not null
+  );
+  `
+
+  await sql`
+  create table if not exists "isCleared" (
+    "releaseId" text not null,
+    "trackId" text not null,
+    "isMatched" boolean,
+    "isCleared" boolean,
+    PRIMARY KEY ("releaseId", "trackId")
+  );
+  `
+
+  await sql`
+  create table if not exists "lsrLog" (
+    "file" text primary key,
+    "ts" timestamptz not null
   );
   `
 }

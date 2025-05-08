@@ -78,9 +78,8 @@ export async function clmReport() {
   console.log(`wrote reports/${fileName}`)
 
   // push to S3
-  const doWrite = true
-  if (doWrite) {
-    const { mri } = sources.reporting()
+  const { mri } = sources.reporting()
+  if (mri) {
     const s3Client = dialS3(mri)
     const key = `inputs/clm/${fileName}`
     await s3Client.send(

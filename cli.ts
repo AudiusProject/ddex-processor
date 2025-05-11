@@ -169,8 +169,8 @@ program
     if (releaseRow.entityType == 'album') {
       const IS_PROD = process.env.NODE_ENV == 'production'
       const API_HOST = IS_PROD
-        ? 'https://discoveryprovider2.audius.co'
-        : 'https://discoveryprovider2.staging.audius.co'
+        ? 'https://api.audius.co'
+        : 'https://api.staging.audius.co'
 
       const albumUrl = `${API_HOST}/v1/full/playlists/${releaseRow.entityId!}`
       const sdkAlbums = await fetch(albumUrl).then((r) => r.json())
@@ -251,8 +251,8 @@ program
 
     const IS_PROD = process.env.NODE_ENV == 'production'
     const API_HOST = IS_PROD
-      ? 'https://discoveryprovider2.audius.co'
-      : 'https://discoveryprovider2.staging.audius.co'
+      ? 'https://api.audius.co'
+      : 'https://api.staging.audius.co'
 
     const albumUrl = `${API_HOST}/v1/full/playlists/${releaseRow.entityId!}`
     const sdkAlbum = await fetch(albumUrl).then((r) => r.json())
@@ -316,6 +316,6 @@ async function startWorker() {
     // want to have human in loop to clean up orphans tracks when that happens.
     // await publishValidPendingReleases()
 
-    // await sleep(5 * 60_000)
+    await sleep(5 * 60_000)
   }
 }

@@ -46,8 +46,8 @@ const COOKIE_NAME = 'audiusUser'
 
 const IS_PROD = NODE_ENV == 'production'
 const API_HOST = IS_PROD
-  ? 'https://discoveryprovider2.audius.co'
-  : 'https://discoveryprovider2.staging.audius.co'
+  ? 'https://api.audius.co'
+  : 'https://api.staging.audius.co'
 const AUDIUS_HOST = IS_PROD ? 'https://audius.co' : 'https://staging.audius.co'
 
 export type Variables = {
@@ -210,14 +210,13 @@ app.get('/releases', async (c) => {
   const querySource = c.req.query('source')
   const limit = parseInt(c.req.query('limit') || '100')
   const offset = parseInt(c.req.query('offset') || '0')
+  console.log('query', c.req.query())
   const rows = await releaseRepo.all({
-    status: queryStatus,
-    source: querySource,
+    ...c.req.query(),
     pendingPublish: parseBool(c.req.query('pendingPublish')),
-    limit,
-    offset,
-    search: querySearch,
     cleared: queryCleared,
+    limit: limit,
+    offset: offset,
   })
 
   const showPagination = offset || rows.length == limit
@@ -241,7 +240,6 @@ app.get('/releases', async (c) => {
     </a>`
   }
 
-  c.header('Cache-Control', 'max-age=300')
   return c.html(
     Layout(
       html`
@@ -635,10 +633,13 @@ app.get('/releases/:key', async (c) => {
   )
 })
 
-app.get('/stats', async (c) => {
-  const stats = await releaseRepo.stats()
-  return c.json(stats)
-})
+// app.get('/stats', async (c) => {
+//   const stats = await releaseRepo.stats()
+//   return c.json(stats)
+// })
+
+import { app as stats } from './views/stats'
+app.route('/stats', stats)
 
 app.get('/history/:key', async (c) => {
   const xmls = await xmlRepo.find(c.req.param('key'))
@@ -1051,7 +1052,7 @@ function Layout(
           <a href="/"><b>ddex</b></a>
           <a href="/releases">releases</a>
           <a href="/users">users</a>
-          <a href="/stats" target="_blank">stats</a>
+          <a href="/stats">stats</a>
           <a href="/report">report</a>
         </div>
         <div style="padding: 50px;">${inner}</div>

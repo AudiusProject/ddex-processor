@@ -74,6 +74,13 @@ const steps = [
   `,
 
   sql`
+  create table if not exists "lsrLog" (
+    "file" text primary key,
+    "ts" timestamptz default now()
+  );
+  `,
+
+  sql`
   create table if not exists "isCleared" (
     "releaseId" text not null,
     "trackId" text not null,
@@ -107,6 +114,13 @@ const steps = [
   ADD COLUMN IF NOT EXISTS "producerCopyrightLine" jsonb,
   ADD COLUMN IF NOT EXISTS "parentalWarningType" text;
   `,
+
+  sql`
+  CREATE INDEX IF NOT EXISTS idx_release_source_label_genre
+  ON releases ("source", "labelName", "genre", "subGenre");
+  `,
+
+  sql`CREATE INDEX IF NOT EXISTS idx_release_timestamp ON releases ("messageTimestamp");`,
 ]
 
 // poor man's migrate

@@ -15,6 +15,8 @@ type FindReleaseParams = {
   offset?: number
   search?: string
   cleared?: boolean
+  labelName?: string
+  genre?: string
 }
 
 type StatsRow = {
@@ -62,8 +64,9 @@ export const releaseRepo = {
       )}
 
       ${ifdef(params.status, sql` and "status" = ${params.status!} `)}
-
       ${ifdef(params.source, sql` and "source" = ${params.source!} `)}
+      ${ifdef(params.labelName, sql`and "labelName" = ${params.labelName!}`)}
+      ${ifdef(params.genre, sql`and "genre" = ${params.genre!}`)}
 
       ${ifdef(
         params.search,

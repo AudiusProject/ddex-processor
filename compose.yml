@@ -3,6 +3,7 @@ services:
     image: postgres
     environment:
       POSTGRES_PASSWORD: example
+    shm_size: '2g'
     ports:
       - 127.0.0.1:40111:5432
 

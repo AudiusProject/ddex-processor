@@ -1069,8 +1069,4 @@ export function startServer() {
     fetch: app.fetch,
     port,
   })
-
-  // shutdown
-  process.once('SIGTERM', () => server.close())
-  process.once('SIGINT', () => server.close())
 }

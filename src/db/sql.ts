@@ -1,11 +1,9 @@
 import postgres from 'postgres'
 
-export const sql = postgres({
-  port: 40111,
-  user: 'postgres',
-  pass: 'example',
-  database: 'ddex1',
-})
+const conn =
+  process.env.DB_URL || 'postgresql://postgres:example@localhost:40111/ddex1'
+
+export const sql = postgres(conn)
 
 //
 //

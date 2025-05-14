@@ -551,8 +551,8 @@ app.get('/releases/:key', async (c) => {
 
               ${associatedUser && (
                 <div>
-                  <b>{associatedUser.handle}</b>
-                  <br />
+                  {audiusUserLink(associatedUser.id)}
+                  <hr />
                   {row.prependArtist && <mark>Label Account</mark>}
                 </div>
               )}

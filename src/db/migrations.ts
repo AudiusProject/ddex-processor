@@ -121,6 +121,7 @@ const steps = [
   `,
 
   sql`CREATE INDEX IF NOT EXISTS idx_release_timestamp ON releases ("messageTimestamp");`,
+  sql`alter table releases drop column if exists "json"`,
 ]
 
 // poor man's migrate

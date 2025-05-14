@@ -277,14 +277,16 @@ export function prepareTrackMetadatas(
             meta.isrc = sound.isrc
           }
 
-          if (deal.forStream) {
+          // apply any conditions to both stream + download
+          // or indexer will say:
+          // failed to process transaction error Track N is stream gated but not download gated
+          if (deal.forStream || deal.forDownload) {
             meta.isStreamGated = true
             meta.streamConditions = cond
             if (!meta.previewStartSeconds) {
               meta.previewStartSeconds = 0
             }
-          }
-          if (deal.forDownload) {
+
             meta.isDownloadable = true
             meta.isDownloadGated = true
             meta.downloadConditions = cond

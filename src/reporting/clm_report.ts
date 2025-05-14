@@ -26,6 +26,7 @@ export async function clmReport() {
     where "releaseType" != 'TrackRelease'
     and "messageTimestamp" > ${marker}
     order by "messageTimestamp" asc
+    limit 50000
   `
   if (releases.length == 0) {
     console.log('no new CLM releases')

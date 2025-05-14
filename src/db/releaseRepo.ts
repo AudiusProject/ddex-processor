@@ -126,24 +126,6 @@ export const releaseRepo = {
       return
     }
 
-    if (!release.audiusUser) {
-      release.problems.push(`NoUser`)
-    } else {
-      const idx = release.problems.indexOf(`NoUser`)
-      if (idx != -1) {
-        release.problems.splice(idx, 1)
-      }
-    }
-
-    const json = release
-
-    // if same xmlUrl + json, skip
-    // may want some smarter json compare here
-    // if this is causing spurious sdk updates to be issued
-    // if (prior && prior.xmlUrl == xmlUrl && prior.json == json) {
-    //   return
-    // }
-
     let status: ReleaseRow['status'] = release.problems.length
       ? ReleaseProcessingStatus.Blocked
       : ReleaseProcessingStatus.PublishPending
@@ -176,7 +158,6 @@ export const releaseRepo = {
       xmlUrl,
       messageTimestamp,
       updatedAt: new Date().toISOString(),
-      json,
       ...release,
     } as Partial<ReleaseRow>
 

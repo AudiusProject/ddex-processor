@@ -50,7 +50,7 @@ app.get('/:source', async (c) => {
     where source = ${source}
     ${after ? sql`and "labelName" > ${after}` : sql``}
     group by 1
-    order by 1
+    order by 2 desc
     limit 100
     `.values()
 
@@ -70,7 +70,7 @@ app.get('/:source', async (c) => {
           {stats.map(([val, count, genres]) => (
             <tr>
               <td>
-                <a href={`/releases?labelName=${encodeURIComponent(val)}`}>
+                <a href={`/releases?search=${encodeURIComponent(val)}`}>
                   {val}
                 </a>
               </td>
@@ -80,7 +80,7 @@ app.get('/:source', async (c) => {
                   {genres.map((g: string) => (
                     <a
                       style="font-size: 80%; background: lightyellow; margin: 3px; padding: 3px;"
-                      href={`/releases?genre=${encodeURIComponent(g)}`}
+                      href={`/releases?search=${encodeURIComponent(g)}`}
                     >
                       {g}
                     </a>

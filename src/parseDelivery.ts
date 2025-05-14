@@ -570,9 +570,7 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
         })
 
       // deal or no deal?
-      if (new Date(release.releaseDate) > new Date()) {
-        release.problems.push('FutureRelease')
-      } else if (!release.deals.length) {
+      if (!release.deals.length) {
         release.problems.push('NoDeal')
       }
 

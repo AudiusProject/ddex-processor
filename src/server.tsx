@@ -307,7 +307,6 @@ app.get('/releases', async (c) => {
               <th>Artist</th>
               <th>Genre</th>
               <th>Release</th>
-              <th>Status</th>
               <th>Clear</th>
               <th></th>
               <th></th>
@@ -343,7 +342,13 @@ app.get('/releases', async (c) => {
                         title="${row.messageTimestamp}"
                         class="pico-color-grey-500"
                       >
-                        ${searchLink(row.labelName)} via ${row.source}
+                        ${searchLink(row.labelName)} via
+                        <a
+                          class="plain contrast"
+                          href=${`?source=${row.source}`}
+                        >
+                          ${row.source}
+                        </a>
                       </em>
                     </small>
                   </td>
@@ -358,10 +363,6 @@ app.get('/releases', async (c) => {
                     <small> (${row.soundRecordings.length})</small>
                     <br />
                     <small>${row.releaseDate}</small>
-                  </td>
-                  <td>
-                    ${row.status}<br />
-                    ${row.problems?.map((p) => html`<small>${p} </small>`)}
                   </td>
                   <td>
                     ${row.numCleared != undefined &&
@@ -433,6 +434,8 @@ app.get('/releases/:key', async (c) => {
 
   const parsedRelease = row
   const clears = await isClearedRepo.listForRelease(releaseId)
+  const isFutureRelease = new Date(parsedRelease.releaseDate) > new Date()
+  const isNoDeal = parsedRelease.deals.length == 0
 
   const allUsers = await userRepo.all()
 
@@ -527,13 +530,6 @@ app.get('/releases/:key', async (c) => {
           <hr />
 
           <div>
-            <div style="padding: 4px">
-              <hr />
-              ${row.status}<br />
-              ${row.problems?.map((p) => html`<small>${p} </small>`)}
-              <hr />
-            </div>
-
             ${row.entityType == 'track' &&
             html` <article>
               <header>Audius Track</header>
@@ -548,11 +544,9 @@ app.get('/releases/:key', async (c) => {
                 ${row.entityId}
               </a>
             </article>`}
-
-            <article>
-              <header>Audius User</header>
-
-              ${associatedUser && (
+            ${associatedUser && (
+              <article>
+                <header>Audius User</header>
                 <div>
                   {audiusUserLink(associatedUser.id)}
                   {row.prependArtist && (
@@ -561,31 +555,24 @@ app.get('/releases/:key', async (c) => {
                     </div>
                   )}
                 </div>
-              )}
-            </article>
-
-            <hr />
-
-            <details>
-              <summary>Publish</summary>
-              <mark>Warning!</mark>
-              <ul>
-                <li>
-                  This will publish this release. Please verify release date +
-                  cleared status.
-                </li>
-                ${!associatedUser &&
-                html`<li>
-                  This will create a claimable Audius account if no artist is
-                  associated
-                </li>`}
-              </ul>
-              <form action="/publish/${releaseId}" method="POST">
-                <button>Publish</button>
-              </form>
-            </details>
-
-            <button onClick="PublishModal.showModal()">Publish</button>
+              </article>
+            )}
+            ${isFutureRelease && (
+              <div>
+                <mark>Future Release</mark>
+              </div>
+            )}
+            ${isNoDeal && (
+              <div>
+                <mark>No Compatible Deal</mark>
+              </div>
+            )}
+            <button
+              ${isFutureRelease || isNoDeal ? 'disabled' : ''}
+              onClick="PublishModal.showModal()"
+            >
+              Publish
+            </button>
           </div>
         </div>
 
@@ -627,7 +614,7 @@ app.get('/releases/:key', async (c) => {
 
                 <fieldset>
                   <label>Audius Genre</label>
-                  <select name="audius_genre" required>
+                  <select name="audiusGenre" required>
                     <option value="">Select Genre</option>
                     ${Object.values(Genre)
                       .filter((g) => g != 'All Genres')
@@ -655,6 +642,7 @@ app.get('/releases/:key', async (c) => {
           </form>
         </dialog>
 
+        <div style="margin-top: 100px;"></div>
         <div class="playa-wrap">
           <audio id="playa" controls></audio>
         </div>
@@ -890,7 +878,7 @@ app.post('/publish/:releaseId', async (c) => {
     release.audiusUser = body.userId as string
   }
 
-  release.genre = body.genre as string
+  release.audiusGenre = body.audiusGenre as Genre
 
   await releaseRepo.upsert(
     releaseRow.source,

@@ -122,6 +122,15 @@ const steps = [
 
   sql`CREATE INDEX IF NOT EXISTS idx_release_timestamp ON releases ("messageTimestamp");`,
   sql`alter table releases drop column if exists "json"`,
+
+  sql`
+  create table if not exists publog (
+    release_id text,
+    actor text,
+    ts timestamptz default now(),
+    msg text,
+    extra jsonb
+  );`,
 ]
 
 // poor man's migrate

@@ -1,6 +1,7 @@
 import { createHedgehogWalletClient, sdk } from '@audius/sdk'
 import { randomBytes } from 'crypto'
 import { assetRepo, releaseRepo, userRepo } from '../db'
+import { publogRepo } from '../db/publogRepo'
 import { DDEXResource } from '../parseDelivery'
 import { publishRelease } from '../publishRelease'
 import { readAssetWithCaching } from '../s3poller'
@@ -80,6 +81,12 @@ export async function publishToClaimableAccount(releaseId: string) {
           },
         })
 
+        await publogRepo.log({
+          release_id: release.key,
+          msg: 'created user',
+          extra: discoveryResult,
+        })
+
         // const entropy = localStorage.getItem('hedgehog-entropy-key')
         encodedUserId = encodeId(discoveryResult.metadata.userId)
         console.log(discoveryResult, encodedUserId)
@@ -93,12 +100,24 @@ export async function publishToClaimableAccount(releaseId: string) {
         })
         console.log('updateImageResult', updateImageResult)
 
+        await publogRepo.log({
+          release_id: release.key,
+          msg: 'set user image',
+          extra: updateImageResult,
+        })
+
         // authorize source ddex app
         const grantResult = await userSdk.grants.createGrant({
           userId: encodedUserId,
           appApiKey: source.ddexKey,
         })
         console.log('grantResult', grantResult)
+
+        await publogRepo.log({
+          release_id: release.key,
+          msg: 'user grant',
+          extra: grantResult,
+        })
 
         // save user details to db
         await userRepo.upsert({

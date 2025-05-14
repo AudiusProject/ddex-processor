@@ -1,4 +1,4 @@
-import { Genre, UploadAlbumRequest, UploadTrackRequest } from '@audius/sdk'
+import { UploadAlbumRequest, UploadTrackRequest } from '@audius/sdk'
 import Web3 from 'web3'
 import {
   ReleaseProcessingStatus,
@@ -6,6 +6,7 @@ import {
   assetRepo,
   releaseRepo,
 } from './db'
+import { publogRepo } from './db/publogRepo'
 import { DDEXContributor, DDEXRelease, DDEXResource } from './parseDelivery'
 import { readAssetWithCaching } from './s3poller'
 import { getSdk } from './sdk'
@@ -62,8 +63,6 @@ export async function publishRelease(
     return
   }
 
-  const skipSdkPublish = process.env.SKIP_SDK_PUBLISH == 'true'
-
   if (!releaseRow.xmlUrl) {
     throw new Error(`xmlUrl is required to resolve file paths`)
   }
@@ -93,6 +92,8 @@ export async function publishRelease(
     }
   }
 
+  console.log('publishing', trackMetadatas)
+
   // publish album
   if (release.soundRecordings.length > 1) {
     const uploadAlbumRequest: UploadAlbumRequest = {
@@ -103,13 +104,14 @@ export async function publishRelease(
       userId: release.audiusUser!,
     }
 
-    if (skipSdkPublish) {
-      console.log('skipping sdk publish')
-      return
-    }
-
     const result = await sdk.albums.uploadAlbum(uploadAlbumRequest)
-    console.log(result)
+    console.log('album published', result)
+
+    await publogRepo.log({
+      release_id: releaseRow.key,
+      msg: 'album publish result',
+      extra: result,
+    })
 
     // on success set publishedAt, entityId, blockhash
     await releaseRepo.update({
@@ -121,6 +123,8 @@ export async function publishRelease(
       blockHash: result.blockHash,
       publishedAt: new Date().toISOString(),
     })
+
+    // todo: poll for result to ensure it's actually created
 
     // return result
   } else if (trackFiles[0]) {
@@ -138,13 +142,14 @@ export async function publishRelease(
       trackFile: trackFile as any,
     }
 
-    if (skipSdkPublish) {
-      console.log('skipping sdk publish')
-      return
-    }
-
     const result = await sdk.tracks.uploadTrack(uploadTrackRequest)
-    console.log(result)
+    console.log('track published', result)
+
+    await publogRepo.log({
+      release_id: releaseRow.key,
+      msg: 'track publish result',
+      extra: result,
+    })
 
     // on succes: update releases
     await releaseRepo.update({
@@ -156,6 +161,8 @@ export async function publishRelease(
       blockHash: result.blockHash,
       publishedAt: new Date().toISOString(),
     })
+
+    // todo: poll for result to ensure it's actually created
   }
 }
 
@@ -190,7 +197,11 @@ export function prepareTrackMetadatas(
 ) {
   const trackMetas: UploadTrackRequest['metadata'][] =
     release.soundRecordings.map((sound) => {
-      const audiusGenre = sound.audiusGenre || release.audiusGenre || Genre.ALL
+      const audiusGenre = release.audiusGenre || sound.audiusGenre
+
+      if (!audiusGenre) {
+        throw `missing audiusGenre for ${releaseRow.key}`
+      }
 
       const releaseDate =
         new Date(sound.releaseDate) ||
@@ -382,8 +393,13 @@ export function prepareAlbumMetadata(
   if (releaseRow.prependArtist) {
     title = release.artists[0].name + ' - ' + title
   }
+
+  if (!release.audiusGenre) {
+    throw `missing audiusGenre for ${releaseRow.key}`
+  }
+
   const meta: UploadAlbumRequest['metadata'] = {
-    genre: release.audiusGenre || Genre.ALL,
+    genre: release.audiusGenre,
     albumName: title,
     releaseDate,
     ddexReleaseIds: release.releaseIds,

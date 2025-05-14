@@ -126,12 +126,17 @@ const steps = [
 
 // poor man's migrate
 export async function pgMigrate() {
-  await sql`
-  create table if not exists pmigrate (
-    raw text primary key,
-    ran_at timestamptz default now()
-  )
-  `
+  const [probe] =
+    await sql`SELECT to_regclass('public.pmigrate') IS NOT NULL AS exists;`
+  if (!probe!.exists) {
+    await sql`
+    create table if not exists pmigrate (
+      raw text primary key,
+      file_name text,
+      ran_at timestamptz default now()
+    )
+    `
+  }
 
   for (const step of steps) {
     const describe = await step.describe()

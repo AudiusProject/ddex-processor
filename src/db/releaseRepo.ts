@@ -167,7 +167,7 @@ export const releaseRepo = {
   async markPrependArtist(key: string, prependArtist: boolean) {
     await sql`
       update releases set
-      prependArtist=${prependArtist ? 'TRUE' : ''}
+      "prependArtist"=${prependArtist}
       where key = ${key}
     `
   },

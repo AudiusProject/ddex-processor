@@ -14,13 +14,19 @@ export async function publishToClaimableAccount(releaseId: string) {
   if (!releaseRow || !release) {
     throw new Error(`release not found: ${releaseId}`)
   }
-  const artistName = release.artists[0].name
-  const baseHandle = artistName.replace(/[^a-zA-Z0-9]/g, '')
 
   const source = sources.findByName(releaseRow.source)
   if (!source) {
     throw new Error(`missing source: ${releaseRow.source}`)
   }
+
+  // if already has a user... don't create claimable account
+  if (release.audiusUser) {
+    return await publishRelease(source!, releaseRow, release)
+  }
+
+  const artistName = release.artists[0].name
+  const baseHandle = artistName.replace(/[^a-zA-Z0-9]/g, '')
 
   // read image asset file
   async function resolveFile({ ref }: DDEXResource) {

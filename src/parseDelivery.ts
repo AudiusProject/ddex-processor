@@ -537,9 +537,6 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
 
       // resolve audius genre
       release.audiusGenre = resolveAudiusGenre(release.genre, release.subGenre)
-      if (!release.audiusGenre) {
-        release.problems.push(`NoGenre`)
-      }
 
       // resolve audius user (that has authorized this source)
       const artistNames = release.artists.map((a) => a.name)

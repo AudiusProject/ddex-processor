@@ -22,7 +22,6 @@ import {
 } from './db'
 import { DDEXContributor, DDEXRelease, parseDdexXml } from './parseDelivery'
 import { prepareAlbumMetadata, prepareTrackMetadatas } from './publishRelease'
-import { formatDateToYYYYMMDD, getPriorMonth } from './reporting/date_utils'
 import { generateSalesReport } from './reporting/sales_report'
 import { dialS3, parseS3Url, readAssetWithCaching } from './s3poller'
 import { sources } from './sources'
@@ -451,6 +450,20 @@ app.get('/releases/:key', async (c) => {
   return c.html(
     Layout(
       html`
+        <div style="display: flex; align-items: center;">
+          <div style="flex-grow: 1">
+            <h1 style="margin-bottom: 0">
+              ${parsedRelease.title} ${parsedRelease.subTitle}
+            </h1>
+            <h3>
+              ${parsedRelease.artists
+                .slice(0, 1)
+                .map((a) => searchLink(a.name))}
+            </h3>
+          </div>
+          <div>${debugLinks(row.xmlUrl, row.key)}</div>
+        </div>
+
         <div style="display: flex; gap: 20px">
           <div>
             <img
@@ -459,22 +472,23 @@ app.get('/releases/:key', async (c) => {
               style="width: 200px; height: 200px; display: block; margin-bottom: 10px"
             />
 
-            <mark>${parsedRelease.parentalWarningType}</mark>
+            <table style="width: 100%; font-size: 90%;" class="compact">
+              ${infoRowLink('Source', row.source)}
+              ${infoRowLink('Label', parsedRelease.labelName)}
+              ${infoRowLink('Genre', parsedRelease.genre)}
+              ${infoRowLink('SubGenre', parsedRelease.subGenre)}
+              ${infoRowLink('Release', parsedRelease.releaseDate)}
+              ${infoRowLink(
+                'Parental',
+                parsedRelease.parentalWarningType || ''
+              )}
+            </table>
           </div>
 
           <div style="flex-grow: 1">
-            <h3 style="margin-bottom: 0">
-              ${parsedRelease.title} ${parsedRelease.subTitle}
-            </h3>
-            <h6>
-              ${parsedRelease.artists
-                .slice(0, 1)
-                .map((a) => searchLink(a.name))}
-            </h6>
-
             ${parsedRelease.soundRecordings.map(
               (sr) => html`
-                <article style="display: flex; gap: 20px">
+                <article style="border-radius: 8px; display: flex; gap: 20px">
                   <div>
                     <button
                       class="outline contrast"
@@ -509,27 +523,16 @@ app.get('/releases/:key', async (c) => {
                 </article>
               `
             )}
-
-            <audio id="playa" controls></audio>
           </div>
           <hr />
 
           <div>
             <div style="padding: 4px">
-              ${debugLinks(row.xmlUrl, row.key)}
               <hr />
               ${row.status}<br />
               ${row.problems?.map((p) => html`<small>${p} </small>`)}
               <hr />
             </div>
-
-            <table style="width: 100%; font-size: 90%;" class="compact">
-              ${infoRowLink('Source', row.source)}
-              ${infoRowLink('Label', parsedRelease.labelName)}
-              ${infoRowLink('Genre', parsedRelease.genre)}
-              ${infoRowLink('SubGenre', parsedRelease.subGenre)}
-              ${infoRowLink('Release', parsedRelease.releaseDate)}
-            </table>
 
             ${row.entityType == 'track' &&
             html` <article>
@@ -552,33 +555,13 @@ app.get('/releases/:key', async (c) => {
               ${associatedUser && (
                 <div>
                   {audiusUserLink(associatedUser.id)}
-                  <hr />
-                  {row.prependArtist && <mark>Label Account</mark>}
+                  {row.prependArtist && (
+                    <div>
+                      <mark>Label Account</mark>
+                    </div>
+                  )}
                 </div>
               )}
-
-              <details style="margin-top: 20px">
-                <summary>Edit</summary>
-                <form action="/associate/${releaseId}">
-                  <fieldset>
-                    <select name="userId" required>
-                      <option value="">Select User</option>
-                      ${allUsers.map(
-                        (u) => html`<option value="${u.id}">${u.name}</option>`
-                      )}
-                    </select>
-
-                    <label
-                      title="Checking label account will prepend artist to track title."
-                    >
-                      <input type="checkbox" name="prependArtist" />
-                      Label Account
-                    </label>
-
-                    <button>Associate</button>
-                  </fieldset>
-                </form>
-              </details>
             </article>
 
             <hr />
@@ -601,8 +584,81 @@ app.get('/releases/:key', async (c) => {
                 <button>Publish</button>
               </form>
             </details>
+
+            <button onClick="PublishModal.showModal()">Publish</button>
           </div>
         </div>
+
+        <dialog id="PublishModal">
+          <form action="/publish/${releaseId}" method="POST">
+            <article>
+              <h2>Publish</h2>
+              <p>
+                <mark>Warning!</mark>
+                Please verify release date + cleared status.
+              </p>
+
+              <div>
+                <fieldset>
+                  <label>Audius User</label>
+                  <select name="userId">
+                    <option value="">Create claimable account</option>
+                    ${allUsers.map((u) => (
+                      <option
+                        value={u.id}
+                        selected={u.id == parsedRelease.audiusUser}
+                      >
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <label
+                    title="Checking label account will prepend artist to track title."
+                  >
+                    <input type="checkbox" name="prependArtist" />
+                    Label Account
+                  </label>
+                  <small>
+                    Checking Label Account will prepend artist name to release
+                    title.
+                  </small>
+                </fieldset>
+
+                <fieldset>
+                  <label>Audius Genre</label>
+                  <select name="audius_genre" required>
+                    <option value="">Select Genre</option>
+                    ${Object.values(Genre)
+                      .filter((g) => g != 'All Genres')
+                      .map((g) => (
+                        <option selected={g == parsedRelease.audiusGenre}>
+                          {g}
+                        </option>
+                      ))}
+                  </select>
+                </fieldset>
+              </div>
+              <footer>
+                <div style="display: flex; gap: 10px">
+                  <button
+                    type="button"
+                    class="secondary"
+                    onClick="PublishModal.close()"
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit">Publish</button>
+                </div>
+              </footer>
+            </article>
+          </form>
+        </dialog>
+
+        <div class="playa-wrap">
+          <audio id="playa" controls></audio>
+        </div>
+
         <script>
           function play(url) {
             playa.onloadstart = () => {
@@ -620,6 +676,16 @@ app.get('/releases/:key', async (c) => {
           }
         </script>
         <style>
+          .playa-wrap {
+            position: fixed;
+            bottom: 0px;
+            left: 0px;
+            width: 100%;
+            padding: 10px;
+          }
+          .playa-wrap audio {
+            width: 100%;
+          }
           .cleared {
             background: lightgreen;
           }
@@ -638,6 +704,8 @@ app.get('/releases/:key', async (c) => {
 //   return c.json(stats)
 // })
 
+import { Genre } from '@audius/sdk'
+import { formatDateToYYYYMMDD, getPriorMonth } from './reporting/date_utils'
 import { app as stats } from './views/stats'
 app.route('/stats', stats)
 
@@ -803,32 +871,6 @@ app.get('/users', async (c) => {
   )
 })
 
-app.get('/associate/:releaseId', async (c) => {
-  const releaseId = c.req.param('releaseId')
-  const releaseRow = await releaseRepo.get(releaseId)
-  const release = releaseRow
-  const user = await userRepo.findById(c.req.query('userId')!)
-  const source = sources.findByName(releaseRow?.source || '')
-  if (!releaseRow || !user || !source || !release) {
-    return c.text('not found', 404)
-  }
-
-  release.audiusUser = user.id
-
-  await releaseRepo.upsert(
-    releaseRow.source,
-    releaseRow.xmlUrl,
-    releaseRow.messageTimestamp,
-    release
-  )
-
-  await releaseRepo.markPrependArtist(
-    releaseId,
-    c.req.query('prependArtist') == 'on'
-  )
-  return c.redirect(`/releases/${releaseId}`)
-})
-
 app.post('/publish/:releaseId', async (c) => {
   const releaseId = c.req.param('releaseId')
   const releaseRow = await releaseRepo.get(releaseId)
@@ -837,6 +879,25 @@ app.post('/publish/:releaseId', async (c) => {
   if (!releaseRow || !source || !release) {
     return c.text('not found', 404)
   }
+
+  const body = await c.req.parseBody()
+
+  if (body.prependArtist == 'on') {
+    await releaseRepo.markPrependArtist(releaseId, true)
+  }
+
+  if (body.userId) {
+    release.audiusUser = body.userId as string
+  }
+
+  release.genre = body.genre as string
+
+  await releaseRepo.upsert(
+    releaseRow.source,
+    releaseRow.xmlUrl,
+    releaseRow.messageTimestamp,
+    release
+  )
 
   // can exceed 60s request timeout, so fire and forget
   publishToClaimableAccount(releaseId)
@@ -1055,7 +1116,7 @@ function Layout(
           <a href="/stats">stats</a>
           <a href="/report">report</a>
         </div>
-        <div style="padding: 50px;">${inner}</div>
+        <div style="padding: 20px 40px;">${inner}</div>
       </body>
     </html>
   `

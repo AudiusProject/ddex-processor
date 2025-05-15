@@ -32,10 +32,11 @@ export async function pollForNewLSRFiles() {
     return
   }
 
+  console.log('LSR COUNT:', result.Contents!.length)
   for (const c of result.Contents) {
     if (!c.Key?.includes('.csv')) continue
 
-    if (isClearedRepo.isLsrDone(c.Key)) continue
+    if (await isClearedRepo.isLsrDone(c.Key)) continue
 
     console.log('Read LSR:', c.Key)
 
@@ -58,11 +59,11 @@ export async function pollForNewLSRFiles() {
         readLsrFile(data!)
       }
 
-      isClearedRepo.markLsrDone(c.Key)
+      await isClearedRepo.markLsrDone(c.Key)
     }
   }
 
-  isClearedRepo.updateCounts()
+  await isClearedRepo.updateCounts()
 }
 
 async function fromDisk() {
@@ -93,11 +94,11 @@ async function readLsrFile(csv: string | Buffer) {
 
     const [_ddex, source, releaseId, isrc] = row.client_catalog_id.split('_')
 
-    isClearedRepo.upsert({
+    await isClearedRepo.upsert({
       releaseId,
       trackId: isrc,
-      isCleared: row.is_cleared,
-      isMatched: row.is_matched,
+      isCleared: row.is_cleared == 't',
+      isMatched: row.is_matched == 't',
     })
   }
 }

@@ -1,6 +1,7 @@
 import { createHedgehogWalletClient, sdk } from '@audius/sdk'
 import { randomBytes } from 'crypto'
 import { assetRepo, releaseRepo, userRepo } from '../db'
+import { publogRepo } from '../db/publogRepo'
 import { DDEXResource } from '../parseDelivery'
 import { publishRelease } from '../publishRelease'
 import { readAssetWithCaching } from '../s3poller'
@@ -9,22 +10,28 @@ import { encodeId } from '../util'
 import { getHedgehog } from './hedgehog'
 
 export async function publishToClaimableAccount(releaseId: string) {
-  const releaseRow = releaseRepo.get(releaseId)
-  const release = releaseRow?._parsed
+  const releaseRow = await releaseRepo.get(releaseId)
+  const release = releaseRow
   if (!releaseRow || !release) {
     throw new Error(`release not found: ${releaseId}`)
   }
-  const artistName = release.artists[0].name
-  const baseHandle = artistName.replace(/[^a-zA-Z0-9]/g, '')
 
   const source = sources.findByName(releaseRow.source)
   if (!source) {
     throw new Error(`missing source: ${releaseRow.source}`)
   }
 
+  // if already has a user... don't create claimable account
+  if (release.audiusUser) {
+    return await publishRelease(source!, releaseRow, release)
+  }
+
+  const artistName = release.artists[0].name
+  const baseHandle = artistName.replace(/[^a-zA-Z0-9]/g, '')
+
   // read image asset file
   async function resolveFile({ ref }: DDEXResource) {
-    const asset = assetRepo.get(releaseRow!.source, releaseRow!.key, ref)
+    const asset = await assetRepo.get(releaseRow!.source, releaseRow!.key, ref)
     if (!asset) {
       throw new Error(`failed to resolve asset ${releaseRow!.key} ${ref}`)
     }
@@ -45,7 +52,7 @@ export async function publishToClaimableAccount(releaseId: string) {
     try {
       // attempt to find existing user record
       // if not found, create a claimable account
-      let encodedUserId = userRepo.match(source.ddexKey, [artistName])
+      let encodedUserId = await userRepo.match(source.ddexKey, [artistName])
       if (!encodedUserId) {
         // no user: create claimable user
         console.log(`=== creating claimable account for ${artistName}`)
@@ -74,6 +81,12 @@ export async function publishToClaimableAccount(releaseId: string) {
           },
         })
 
+        await publogRepo.log({
+          release_id: release.key,
+          msg: 'created user',
+          extra: discoveryResult,
+        })
+
         // const entropy = localStorage.getItem('hedgehog-entropy-key')
         encodedUserId = encodeId(discoveryResult.metadata.userId)
         console.log(discoveryResult, encodedUserId)
@@ -87,6 +100,12 @@ export async function publishToClaimableAccount(releaseId: string) {
         })
         console.log('updateImageResult', updateImageResult)
 
+        await publogRepo.log({
+          release_id: release.key,
+          msg: 'set user image',
+          extra: updateImageResult,
+        })
+
         // authorize source ddex app
         const grantResult = await userSdk.grants.createGrant({
           userId: encodedUserId,
@@ -94,19 +113,26 @@ export async function publishToClaimableAccount(releaseId: string) {
         })
         console.log('grantResult', grantResult)
 
+        await publogRepo.log({
+          release_id: release.key,
+          msg: 'user grant',
+          extra: grantResult,
+        })
+
         // save user details to db
-        userRepo.upsert({
+        await userRepo.upsert({
           id: encodedUserId,
           apiKey: source.ddexKey,
           handle: handle,
           name: artistName,
           password,
+          createdAt: new Date(),
         })
       }
 
       // save release with associated audius user
       release.audiusUser = encodedUserId
-      releaseRepo.upsert(
+      await releaseRepo.upsert(
         releaseRow.source,
         releaseRow.xmlUrl,
         releaseRow.messageTimestamp,

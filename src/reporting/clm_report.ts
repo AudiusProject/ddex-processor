@@ -1,15 +1,15 @@
 import { PutObjectCommand } from '@aws-sdk/client-s3'
-import sql from '@radically-straightforward/sqlite'
 import { stringify } from 'csv-stringify/sync'
 import { mkdir, writeFile } from 'fs/promises'
 import path from 'path'
-import { releaseRepo, s3markerRepo } from '../db'
+import { releaseRepo, ReleaseRow, s3markerRepo } from '../db'
+import { sql } from '../db/sql'
 import { dialS3 } from '../s3poller'
 import { sources } from '../sources'
 
 export async function clmReport() {
   const markerKey = 'report_clm'
-  let marker = s3markerRepo.get(markerKey) || '2024-10-26'
+  let marker = (await s3markerRepo.get(markerKey)) || '2024-10-26'
 
   // don't run twice on same day
   const todayDate = new Date().toISOString().substring(0, 10)
@@ -21,12 +21,13 @@ export async function clmReport() {
     console.log('Running CLM report')
   }
 
-  const releases = releaseRepo.rawSelect(sql`
+  const releases: ReleaseRow[] = await sql`
     select * from releases
-    where releaseType != 'TrackRelease'
-    and messageTimestamp > ${marker}
-    order by messageTimestamp asc
-  `)
+    where "releaseType" != 'TrackRelease'
+    and "messageTimestamp" > ${marker}
+    order by "messageTimestamp" asc
+    limit 50000
+  `
   if (releases.length == 0) {
     console.log('no new CLM releases')
     return
@@ -34,7 +35,7 @@ export async function clmReport() {
 
   const rows = releases.flatMap((releaseRow) => {
     marker = releaseRow.messageTimestamp
-    const r = releaseRow._parsed!
+    const r = releaseRow
     return r.soundRecordings.map((track) => {
       if (!track.isrc) {
         throw new Error(
@@ -77,9 +78,8 @@ export async function clmReport() {
   console.log(`wrote reports/${fileName}`)
 
   // push to S3
-  const doWrite = true
-  if (doWrite) {
-    const { mri } = sources.reporting()
+  const { mri } = sources.reporting()
+  if (mri) {
     const s3Client = dialS3(mri)
     const key = `inputs/clm/${fileName}`
     await s3Client.send(
@@ -95,7 +95,7 @@ export async function clmReport() {
 
   // update marker
   console.log(`Update marker ${markerKey}=${marker}`)
-  s3markerRepo.upsert(markerKey, marker)
+  await s3markerRepo.upsert(markerKey, marker)
 }
 
 function padToTwoDigits(num: number) {

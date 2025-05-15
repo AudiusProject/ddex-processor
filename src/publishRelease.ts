@@ -1,4 +1,4 @@
-import { Genre, UploadAlbumRequest, UploadTrackRequest } from '@audius/sdk'
+import { UploadAlbumRequest, UploadTrackRequest } from '@audius/sdk'
 import Web3 from 'web3'
 import {
   ReleaseProcessingStatus,
@@ -6,6 +6,7 @@ import {
   assetRepo,
   releaseRepo,
 } from './db'
+import { publogRepo } from './db/publogRepo'
 import { DDEXContributor, DDEXRelease, DDEXResource } from './parseDelivery'
 import { readAssetWithCaching } from './s3poller'
 import { getSdk } from './sdk'
@@ -16,7 +17,7 @@ const DEFAULT_TRACK_PRICE = 1.0
 const DEFAULT_ALBUM_PRICE = 5.0
 
 export async function publishValidPendingReleases() {
-  const rows = releaseRepo.all({ pendingPublish: true })
+  const rows = await releaseRepo.all({ pendingPublish: true })
   if (!rows.length) return
 
   for (const row of rows) {
@@ -24,7 +25,7 @@ export async function publishValidPendingReleases() {
     if (!source) {
       continue
     }
-    const parsed = row._parsed!
+    const parsed = row
 
     if (row.status == ReleaseProcessingStatus.DeletePending) {
       // delete
@@ -44,7 +45,7 @@ export async function publishValidPendingReleases() {
         await publishRelease(source, row, parsed)
       } catch (e: any) {
         console.log('failed to publish', row.key, e)
-        releaseRepo.addPublishError(row.key, e)
+        await releaseRepo.addPublishError(row.key, e)
       }
     }
   }
@@ -62,8 +63,6 @@ export async function publishRelease(
     return
   }
 
-  const skipSdkPublish = process.env.SKIP_SDK_PUBLISH == 'true'
-
   if (!releaseRow.xmlUrl) {
     throw new Error(`xmlUrl is required to resolve file paths`)
   }
@@ -72,7 +71,7 @@ export async function publishRelease(
 
   // read asset file
   async function resolveFile({ ref }: DDEXResource) {
-    const asset = assetRepo.get(source.name, releaseRow.key, ref)
+    const asset = await assetRepo.get(source.name, releaseRow.key, ref)
     if (!asset) {
       throw new Error(`failed to resolve asset ${releaseRow.key} ${ref}`)
     }
@@ -93,6 +92,8 @@ export async function publishRelease(
     }
   }
 
+  console.log('publishing', trackMetadatas)
+
   // publish album
   if (release.soundRecordings.length > 1) {
     const uploadAlbumRequest: UploadAlbumRequest = {
@@ -103,16 +104,17 @@ export async function publishRelease(
       userId: release.audiusUser!,
     }
 
-    if (skipSdkPublish) {
-      console.log('skipping sdk publish')
-      return
-    }
-
     const result = await sdk.albums.uploadAlbum(uploadAlbumRequest)
-    console.log(result)
+    console.log('album published', result)
+
+    await publogRepo.log({
+      release_id: releaseRow.key,
+      msg: 'album publish result',
+      extra: result,
+    })
 
     // on success set publishedAt, entityId, blockhash
-    releaseRepo.update({
+    await releaseRepo.update({
       key: releaseRow.key,
       status: ReleaseProcessingStatus.Published,
       entityType: 'album',
@@ -121,6 +123,8 @@ export async function publishRelease(
       blockHash: result.blockHash,
       publishedAt: new Date().toISOString(),
     })
+
+    // todo: poll for result to ensure it's actually created
 
     // return result
   } else if (trackFiles[0]) {
@@ -138,16 +142,17 @@ export async function publishRelease(
       trackFile: trackFile as any,
     }
 
-    if (skipSdkPublish) {
-      console.log('skipping sdk publish')
-      return
-    }
-
     const result = await sdk.tracks.uploadTrack(uploadTrackRequest)
-    console.log(result)
+    console.log('track published', result)
+
+    await publogRepo.log({
+      release_id: releaseRow.key,
+      msg: 'track publish result',
+      extra: result,
+    })
 
     // on succes: update releases
-    releaseRepo.update({
+    await releaseRepo.update({
       key: releaseRow.key,
       status: ReleaseProcessingStatus.Published,
       entityType: 'track',
@@ -156,6 +161,8 @@ export async function publishRelease(
       blockHash: result.blockHash,
       publishedAt: new Date().toISOString(),
     })
+
+    // todo: poll for result to ensure it's actually created
   }
 }
 
@@ -173,7 +180,7 @@ export async function updateTrack(
     metadata: metas[0],
   })
 
-  releaseRepo.update({
+  await releaseRepo.update({
     key: row.key,
     status: ReleaseProcessingStatus.Published,
     publishedAt: new Date().toISOString(),
@@ -190,7 +197,11 @@ export function prepareTrackMetadatas(
 ) {
   const trackMetas: UploadTrackRequest['metadata'][] =
     release.soundRecordings.map((sound) => {
-      const audiusGenre = sound.audiusGenre || release.audiusGenre || Genre.ALL
+      const audiusGenre = release.audiusGenre || sound.audiusGenre
+
+      if (!audiusGenre) {
+        throw `missing audiusGenre for ${releaseRow.key}`
+      }
 
       const releaseDate =
         new Date(sound.releaseDate) ||
@@ -277,14 +288,16 @@ export function prepareTrackMetadatas(
             meta.isrc = sound.isrc
           }
 
-          if (deal.forStream) {
+          // apply any conditions to both stream + download
+          // or indexer will say:
+          // failed to process transaction error Track N is stream gated but not download gated
+          if (deal.forStream || deal.forDownload) {
             meta.isStreamGated = true
             meta.streamConditions = cond
             if (!meta.previewStartSeconds) {
               meta.previewStartSeconds = 0
             }
-          }
-          if (deal.forDownload) {
+
             meta.isDownloadable = true
             meta.isDownloadGated = true
             meta.downloadConditions = cond
@@ -318,7 +331,7 @@ export async function updateAlbum(
     metadata: meta,
   })
 
-  releaseRepo.update({
+  await releaseRepo.update({
     key: row.key,
     status: ReleaseProcessingStatus.Published,
     publishedAt: new Date().toISOString(),
@@ -330,12 +343,12 @@ export async function updateAlbum(
 
 export async function deleteRelease(source: SourceConfig, r: ReleaseRow) {
   const sdk = getSdk(source)
-  const userId = r._parsed!.audiusUser!
+  const userId = r.audiusUser!
   const entityId = r.entityId
 
   // if not yet published to audius, mark internal releases row as deleted
   if (!userId || !entityId) {
-    releaseRepo.update({
+    await releaseRepo.update({
       key: r.key,
       status: ReleaseProcessingStatus.Deleted,
     })
@@ -356,8 +369,8 @@ export async function deleteRelease(source: SourceConfig, r: ReleaseRow) {
     return onDeleted(result)
   }
 
-  function onDeleted(result: any) {
-    releaseRepo.update({
+  async function onDeleted(result: any) {
+    await releaseRepo.update({
       key: r.key,
       status: ReleaseProcessingStatus.Deleted,
       publishedAt: new Date().toISOString(),
@@ -380,8 +393,13 @@ export function prepareAlbumMetadata(
   if (releaseRow.prependArtist) {
     title = release.artists[0].name + ' - ' + title
   }
+
+  if (!release.audiusGenre) {
+    throw `missing audiusGenre for ${releaseRow.key}`
+  }
+
   const meta: UploadAlbumRequest['metadata'] = {
-    genre: release.audiusGenre || Genre.ALL,
+    genre: release.audiusGenre,
     albumName: title,
     releaseDate,
     ddexReleaseIds: release.releaseIds,

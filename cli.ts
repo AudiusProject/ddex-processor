@@ -4,6 +4,7 @@ import { program } from 'commander'
 import { publishToClaimableAccount } from './src/claimable/createUserPublish'
 import { cleanupFiles } from './src/cleanupFiles'
 import { releaseRepo, userRepo } from './src/db'
+import { pgMigrate } from './src/db/migrations'
 import { parseDelivery } from './src/parseDelivery'
 import {
   prepareTrackMetadatas,
@@ -47,17 +48,14 @@ program
     'Prepend artist name: <artist> - <title>.  Useful for label accounts'
   )
   .action(async (releaseId, userId, opts) => {
-    const releaseRow = releaseRepo.get(releaseId)
-    const release = releaseRow?._parsed
+    const releaseRow = await releaseRepo.get(releaseId)
+    const release = releaseRow!
     if (!releaseRow || !release) {
       throw new Error(`release not found: ${releaseId}`)
     }
 
     const source = sources.findByName(releaseRow.source)
-    const user = userRepo.findOne({
-      id: userId,
-      apiKey: source?.ddexKey,
-    })
+    const user = await userRepo.findById(userId)
 
     if (!user) {
       throw new Error(`connected user not found: ${userId}`)
@@ -82,7 +80,7 @@ program
 
     await sleep(5_000)
 
-    releaseRepo.upsert(
+    await releaseRepo.upsert(
       releaseRow.source,
       releaseRow.xmlUrl,
       releaseRow.messageTimestamp,
@@ -144,13 +142,13 @@ program
   .description('Delete a release... USE CAUTION')
   .argument('<release_id>', 'release ID to delete')
   .action(async (releaseId) => {
-    const releaseRow = releaseRepo.get(releaseId)
+    const releaseRow = await releaseRepo.get(releaseId)
     if (!releaseRow) {
       console.warn(`no release for id: ${releaseId}`)
       process.exit(1)
     }
 
-    const release = releaseRow._parsed!
+    const release = releaseRow
     const userId = release.audiusUser
     if (!releaseRow.entityId) {
       console.warn(`release id ${releaseId} has no entityId`)
@@ -171,8 +169,8 @@ program
     if (releaseRow.entityType == 'album') {
       const IS_PROD = process.env.NODE_ENV == 'production'
       const API_HOST = IS_PROD
-        ? 'https://discoveryprovider2.audius.co'
-        : 'https://discoveryprovider2.staging.audius.co'
+        ? 'https://api.audius.co'
+        : 'https://api.staging.audius.co'
 
       const albumUrl = `${API_HOST}/v1/full/playlists/${releaseRow.entityId!}`
       const sdkAlbums = await fetch(albumUrl).then((r) => r.json())
@@ -224,7 +222,7 @@ program
   .description('issue sdk updates for all album tracks')
   .argument('<release_id>', 'release ID to republish')
   .action(async (releaseId) => {
-    const releaseRow = releaseRepo.get(releaseId)
+    const releaseRow = await releaseRepo.get(releaseId)
     if (!releaseRow) {
       throw new Error(`Release ID ${releaseId} not found`)
     }
@@ -253,8 +251,8 @@ program
 
     const IS_PROD = process.env.NODE_ENV == 'production'
     const API_HOST = IS_PROD
-      ? 'https://discoveryprovider2.audius.co'
-      : 'https://discoveryprovider2.staging.audius.co'
+      ? 'https://api.audius.co'
+      : 'https://api.staging.audius.co'
 
     const albumUrl = `${API_HOST}/v1/full/playlists/${releaseRow.entityId!}`
     const sdkAlbum = await fetch(albumUrl).then((r) => r.json())
@@ -262,7 +260,7 @@ program
     const trackUpdates = prepareTrackMetadatas(
       sourceConfig,
       releaseRow,
-      releaseRow._parsed!
+      releaseRow
     )
 
     for (const sdkTrack of sdkAlbum.data![0].tracks) {
@@ -296,7 +294,11 @@ program
 
 program.command('cleanup').description('remove temp files').action(cleanupFiles)
 
-program.parse()
+async function main() {
+  await pgMigrate()
+  program.parse()
+}
+main()
 
 async function startWorker() {
   startUsersPoller().catch(console.error)
@@ -314,6 +316,6 @@ async function startWorker() {
     // want to have human in loop to clean up orphans tracks when that happens.
     // await publishValidPendingReleases()
 
-    await sleep(10 * 60_000)
+    await sleep(5 * 60_000)
   }
 }

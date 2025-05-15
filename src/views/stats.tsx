@@ -1,7 +1,6 @@
 import { Hono } from 'hono'
-import { html } from 'hono/html'
-import { PropsWithChildren } from 'hono/jsx'
 import { sql } from '../db/sql'
+import { Layout2 } from './layout2'
 
 export const app = new Hono()
 
@@ -15,7 +14,7 @@ app.get('/', async (c) => {
     await sql`select source, count(*) count from releases group by 1`.values()
 
   return c.html(
-    <Layout title="stats">
+    <Layout2 title="stats">
       <h1>Stats</h1>
 
       <table>
@@ -34,7 +33,7 @@ app.get('/', async (c) => {
           </tr>
         ))}
       </table>
-    </Layout>
+    </Layout2>
   )
 })
 
@@ -55,7 +54,7 @@ app.get('/:source', async (c) => {
     `.values()
 
   return c.html(
-    <Layout title={`stats: ${source}`}>
+    <Layout2 title={`stats: ${source}`}>
       <h1>Source: {source}</h1>
 
       <table>
@@ -97,28 +96,6 @@ app.get('/:source', async (c) => {
           <a href={`?after=${encodeURIComponent(stats.at(-1)![0])}`}>NEXT</a>
         </div>
       )}
-    </Layout>
+    </Layout2>
   )
 })
-
-function Layout({ title, children }: PropsWithChildren<{ title: string }>) {
-  return html`<!doctype html>
-    <html>
-      <head>
-        <title>${title}</title>
-
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
-        />
-      </head>
-      <body>
-        <div style="padding: 20px;">
-          <a href="/releases">back to releases</a>
-        </div>
-        <div class="container">${children}</div>
-      </body>
-    </html>`
-}

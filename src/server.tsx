@@ -14,6 +14,7 @@ import { HtmlEscapedString } from 'hono/utils/html'
 import { publishToClaimableAccount } from './claimable/createUserPublish'
 import {
   ReleaseProcessingStatus,
+  ReleaseRow,
   assetRepo,
   isClearedRepo,
   releaseRepo,
@@ -26,6 +27,12 @@ import { generateSalesReport } from './reporting/sales_report'
 import { dialS3, parseS3Url, readAssetWithCaching } from './s3poller'
 import { sources } from './sources'
 import { parseBool } from './util'
+
+import { Genre } from '@audius/sdk'
+import { publogRepo } from './db/publogRepo'
+import { formatDateToYYYYMMDD, getPriorMonth } from './reporting/date_utils'
+import { Layout2 } from './views/layout2'
+import { app as stats } from './views/stats'
 
 // read env
 const { NODE_ENV, DDEX_URL, COOKIE_SECRET } = process.env
@@ -687,20 +694,12 @@ app.get('/releases/:key', async (c) => {
   )
 })
 
-// app.get('/stats', async (c) => {
-//   const stats = await releaseRepo.stats()
-//   return c.json(stats)
-// })
-
-import { Genre } from '@audius/sdk'
-import { formatDateToYYYYMMDD, getPriorMonth } from './reporting/date_utils'
-import { app as stats } from './views/stats'
 app.route('/stats', stats)
 
 app.get('/history/:key', async (c) => {
   const xmls = await xmlRepo.find(c.req.param('key'))
   return c.html(
-    Layout(html`
+    <Layout2 title="XML History">
       <table>
         <thead>
           <tr>
@@ -712,7 +711,7 @@ app.get('/history/:key', async (c) => {
         </thead>
 
         <tbody>
-          ${xmls.map((x) => (
+          {xmls.map((x) => (
             <tr>
               <td>
                 <a href="">{x.xmlUrl}</a>
@@ -724,7 +723,7 @@ app.get('/history/:key', async (c) => {
           ))}
         </tbody>
       </table>
-    `)
+    </Layout2>
   )
 })
 
@@ -823,48 +822,48 @@ app.get('/releases/:key/error', async (c) => {
 app.get('/users', async (c) => {
   const users = await userRepo.all()
   return c.html(
-    Layout(
-      html`<h1>Users</h1>
+    <Layout2 title="users">
+      <h1>Users</h1>
 
-        <table>
-          <thead>
+      <table>
+        <thead>
+          <tr>
+            <th>id</th>
+            <th>handle</th>
+            <th>name</th>
+            <th>api key</th>
+            <th>password</th>
+            <th>created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map((user) => (
             <tr>
-              <th>id</th>
-              <th>handle</th>
-              <th>name</th>
-              <th>api key</th>
-              <th>password</th>
-              <th>created</th>
+              <td>{user.id}</td>
+              <td>{user.handle}</td>
+              <td>{user.name}</td>
+              <td>
+                <b title="${user.apiKey}">
+                  {sources.findByApiKey(user.apiKey)?.name}
+                </b>
+              </td>
+              <td>{user.password}</td>
+              <td>{user.createdAt}</td>
             </tr>
-          </thead>
-          <tbody>
-            ${users.map(
-              (user) =>
-                html`<tr>
-                  <td>${user.id}</td>
-                  <td>${user.handle}</td>
-                  <td>${user.name}</td>
-                  <td>
-                    <b title="${user.apiKey}"
-                      >${sources.findByApiKey(user.apiKey)?.name}</b
-                    >
-                  </td>
-                  <td>${user.password}</td>
-                  <td>${user.createdAt}</td>
-                </tr>`
-            )}
-          </tbody>
-        </table> `
-    )
+          ))}
+        </tbody>
+      </table>
+    </Layout2>
   )
 })
 
 app.post('/publish/:releaseId', async (c) => {
+  const me = await getAudiusUser(c)
   const releaseId = c.req.param('releaseId')
   const releaseRow = await releaseRepo.get(releaseId)
   const release = releaseRow
   const source = sources.findByName(releaseRow?.source || '')
-  if (!releaseRow || !source || !release) {
+  if (!releaseRow || !source || !release || !me) {
     return c.text('not found', 404)
   }
 
@@ -887,68 +886,127 @@ app.post('/publish/:releaseId', async (c) => {
     release
   )
 
-  // can exceed 60s request timeout, so fire and forget
-  publishToClaimableAccount(releaseId)
-  return c.html(
-    Layout(html`
-      <h2>Publishing ${release.title}</h2>
-      <ul>
-        <li>Publishing can take a minute or two.</li>
-        <li>When complete the release will Published status.</li>
-        <li>
-          You can return to the release page and refresh to check the status.
-        </li>
-      </ul>
-      <p>
-        <a href=${`/releases/${releaseId}`}>Back to release</a>
-      </p>
-    `)
-  )
+  await publogRepo.log({
+    actor: me.handle,
+    msg: 'Pressed Publish',
+    release_id: releaseRow.key,
+    extra: body,
+  })
 
-  // return c.redirect(`/releases/${releaseId}`)
+  // can exceed 60s request timeout, so fire and forget
+  // TODO: this will always publish new release
+  // need to add conditional update logic
+  publishToClaimableAccount(releaseId)
+
+  return c.redirect(`/releases/${releaseId}/publog?poll=1`)
+})
+
+function ReleaseBanner({ release }: { release: ReleaseRow }) {
+  return (
+    <div style="display: flex; align-items: center;">
+      <div style="flex-grow: 1">
+        <h1 style="margin-bottom: 0">
+          {release.title} {release.subTitle}
+        </h1>
+        <h3>
+          {release.artists.slice(0, 1).map((a) => (
+            <div>{a.name}</div>
+          ))}
+        </h3>
+      </div>
+      <div>{debugLinks(release.xmlUrl, release.key)}</div>
+    </div>
+  )
+}
+
+app.get('/releases/:releaseId/publog', async (c) => {
+  const release = await releaseRepo.get(c.req.param('releaseId'))
+  if (!release) {
+    return c.text('not found', 404)
+  }
+  const logs = await publogRepo.forRelease(c.req.param('releaseId'))
+  if (parseBool(c.req.query('json'))) {
+    return c.json(logs)
+  }
+  return c.html(
+    <Layout2 title="publog">
+      <ReleaseBanner release={release} />
+      <h4>Publish Log</h4>
+
+      <table style="white-space: nowrap;">
+        <tbody>
+          {logs.map((log) => (
+            <tr>
+              <td>{log.ts.toLocaleString()}</td>
+              <td>{log.actor}</td>
+              <td>{log.msg}</td>
+              <td>
+                <pre style="margin: 0">{JSON.stringify(log.extra)}</pre>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div style="display: flex; gap: 16px; font-size: 90%;">
+        <a href={`/releases/${release.key}`}>Back to Release</a>
+        <a href="?json=1">View as JSON</a>
+      </div>
+
+      {c.req.query('poll') &&
+        html`
+          <script>
+            setTimeout(function () {
+              window.location.reload(1)
+            }, 5000)
+          </script>
+        `}
+    </Layout2>
+  )
 })
 
 app.get('/report', (c) => {
   const [start, end] = getPriorMonth()
   return c.html(
-    Layout(
-      html`
-        <h2>Sales Report</h2>
-        <form method="POST">
-          <fieldset class="grid">
-            <label>
-              Source
-              <select name="sourceName" required>
-                <option selected disabled value="">Source</option>
-                ${sources.all().map((s) => html`<option>${s.name}</option>`)}
-              </select>
-            </label>
+    <Layout2 title="Sales Report">
+      <h2>Sales Report</h2>
+      <form method="post">
+        <fieldset class="grid">
+          <label>
+            Source
+            <select name="sourceName" required>
+              <option selected disabled value="">
+                Source
+              </option>
+              {sources.all().map((s) => (
+                <option>{s.name}</option>
+              ))}
+            </select>
+          </label>
 
-            <label>
-              Start Date
-              <input
-                type="date"
-                name="start"
-                required
-                value="${formatDateToYYYYMMDD(start)}"
-              />
-            </label>
+          <label>
+            Start Date
+            <input
+              type="date"
+              name="start"
+              required
+              value={formatDateToYYYYMMDD(start)}
+            />
+          </label>
 
-            <label>
-              End Date
-              <input
-                type="date"
-                name="end"
-                required
-                value="${formatDateToYYYYMMDD(end)}"
-              />
-            </label>
-          </fieldset>
-          <button>Generate</button>
-        </form>
-      `,
-      'Sales Report'
-    )
+          <label>
+            End Date
+            <input
+              type="date"
+              name="end"
+              required
+              value={formatDateToYYYYMMDD(end)}
+            />
+          </label>
+        </fieldset>
+        <button>Generate</button>
+      </form>
+    </Layout2>
   )
 })
 
@@ -1028,7 +1086,10 @@ function debugLinks(xmlUrl: string, releaseId?: string) {
     >
 
     ${releaseId &&
-    html`<a class="plain secondary" href="/history/${releaseId}">history</a>`}
+    html`
+      <a class="plain secondary" href="/history/${releaseId}">history</a>
+      <a class="plain secondary" href="/releases/${releaseId}/publog">publog</a>
+    `}
   `
 }
 

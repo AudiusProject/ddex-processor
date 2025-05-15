@@ -70,7 +70,7 @@ export function Layout2({
           <a href="/releases">releases</a>
           <a href="/users">users</a>
           <a href="/stats">stats</a>
-          <a href="/report">report</a>
+          <a href="/report">sales report</a>
         </div>
         <div style="padding: 20px 40px;">${children}</div>
       </body>

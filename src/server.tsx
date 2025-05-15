@@ -10,7 +10,6 @@ import { html } from 'hono/html'
 import { decode } from 'hono/jwt'
 import { logger } from 'hono/logger'
 import { prettyJSON } from 'hono/pretty-json'
-import { HtmlEscapedString } from 'hono/utils/html'
 import { publishToClaimableAccount } from './claimable/createUserPublish'
 import {
   ReleaseProcessingStatus,
@@ -81,42 +80,46 @@ app.get('/', async (c) => {
   }
 
   return c.html(
-    Layout(html`
+    <Layout2 title="DDEX">
       <div class="container">
         <h1>Audius DDEX</h1>
 
-        ${c.req.query('loginRequired')
-          ? html`<mark>Please login to continue</mark><br />`
-          : ''}
-        ${me
-          ? html`
-              <h4>Welcome back @${me.handle}</h4>
-              <a href="/auth/logout" role="button">log out</a>
-            `
-          : html`
-              <div>
-                <div>
-                  <a role="button" href="/auth/source/${firstSource.name}">
-                    Login
-                  </a>
-                </div>
+        {c.req.query('loginRequired') && (
+          <>
+            <mark>Please login to continue</mark>
+            <br />
+          </>
+        )}
 
-                <div style="margin-top: 50px">
-                  <div>Or Choose Auth Provider (Advanced)</div>
-                  <div>
-                    ${authSources.map(
-                      (s) => html`
-                        <a style="padding: 4px" href="/auth/source/${s.name}">
-                          ${s.name}
-                        </a>
-                      `
-                    )}
-                  </div>
-                </div>
+        {me ? (
+          <>
+            <h4>Welcome back @{me.handle}</h4>
+            <a href="/auth/logout" role="button">
+              log out
+            </a>
+          </>
+        ) : (
+          <div>
+            <div>
+              <a role="button" href={`/auth/source/${firstSource.name}`}>
+                Login
+              </a>
+            </div>
+
+            <div style="margin-top: 50px">
+              <div>Or Choose Auth Provider (Advanced)</div>
+              <div>
+                {authSources.map((s) => (
+                  <a style="padding: 4px" href={`/auth/source/${s.name}`}>
+                    {s.name}
+                  </a>
+                ))}
               </div>
-            `}
+            </div>
+          </div>
+        )}
       </div>
-    `)
+    </Layout2>
   )
 })
 
@@ -162,12 +165,6 @@ app.get('/auth/redirect', async (c) => {
       name: payload.name,
       createdAt: new Date(),
     })
-
-    // after user upsert, rescan for matches
-    // todo: reparsing all actually takes a while now
-    // and blocks up the webserver for multiple seconds
-    // so probably need to move worker to a separate process...
-    // setTimeout(() => reParsePastXml(), 10)
 
     // set cookie
     const j = JSON.stringify(payload)
@@ -247,53 +244,49 @@ app.get('/releases', async (c) => {
   }
 
   return c.html(
-    Layout(
-      html`
-        <h1>Releases</h1>
+    <Layout2 title={querySearch || 'Releases'}>
+      <h1>Releases</h1>
 
-        <div style="display: flex; gap: 10px;">
-          <!-- filters -->
-          <form style="display: flex; flex-grow: 1; gap: 10px;">
-            <input name="search" placeholder="Search" value="${querySearch}" />
-            <select name="status" onchange="this.form.submit()">
-              <option selected value="">Status</option>
-              ${Object.values(ReleaseProcessingStatus).map(
-                (s) =>
-                  html`<option ${queryStatus == s ? 'selected' : ''}>
-                    ${s}
-                  </option>`
-              )}
-            </select>
-            <select name="source" onchange="this.form.submit()">
-              <option selected value="">Source</option>
-              ${sources
-                .all()
-                .map(
-                  (s) =>
-                    html`<option ${querySource == s.name ? 'selected' : ''}>
-                      ${s.name}
-                    </option>`
-                )}
-            </select>
-            <label style="display: flex; align-items: center;">
-              <input
-                name="cleared"
-                type="checkbox"
-                role="switch"
-                ${queryCleared ? 'checked' : ''}
-                onchange="this.form.submit()"
-              />
-              Cleared
-            </label>
-          </form>
+      <div style="display: flex; gap: 10px;">
+        {/* <!-- filters --> */}
+        <form style="display: flex; flex-grow: 1; gap: 10px;">
+          <input name="search" placeholder="Search" value={querySearch} />
+          <select name="status" onchange="this.form.submit()">
+            <option selected value="">
+              Status
+            </option>
+            {Object.values(ReleaseProcessingStatus).map((s) => (
+              <option selected={queryStatus == s}>{s}</option>
+            ))}
+          </select>
+          <select name="source" onchange="this.form.submit()">
+            <option selected value="">
+              Source
+            </option>
 
-          ${showPagination &&
-          html`<div>
+            {sources.all().map((s) => (
+              <option selected={querySource == s.name}>{s.name}</option>
+            ))}
+          </select>
+          <label style="display: flex; align-items: center;">
+            <input
+              name="cleared"
+              type="checkbox"
+              role="switch"
+              checked={queryCleared}
+              onchange="this.form.submit()"
+            />
+            Cleared
+          </label>
+        </form>
+
+        {showPagination && (
+          <div>
             <a
               role="button"
               class="outline contrast"
               href="${withQueryParam('offset', offset - limit)}"
-              ${offset == 0 ? 'disabled' : ''}
+              disabled={offset == 0}
             >
               ⫷
             </a>
@@ -304,115 +297,107 @@ app.get('/releases', async (c) => {
             >
               ⫸
             </a>
-          </div>`}
-        </div>
+          </div>
+        )}
+      </div>
 
-        <table>
-          <thead>
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Artist</th>
+            <th>Genre</th>
+            <th>Release</th>
+            <th>Clear</th>
+            <th></th>
+            <th></th>
+            <th>debug</th>
+          </tr>
+        </thead>
+        <tbody style="line-height: 1; white-space: nowrap;">
+          {rows.map((row) => (
             <tr>
-              <th></th>
-              <th>Artist</th>
-              <th>Genre</th>
-              <th>Release</th>
-              <th>Clear</th>
-              <th></th>
-              <th></th>
-              <th>debug</th>
-            </tr>
-          </thead>
-          <tbody style="line-height: 1; white-space: nowrap;">
-            ${rows.map(
-              (row) =>
-                html` <tr>
-                  <td style="min-width: 80px;">
-                    <img
-                      src="/release/${row.source}/${row.key}/${row.images[0]
-                        ?.ref}/200"
-                      width="80"
-                      height="80"
-                    />
-                  </td>
-                  <td class="truncate">
-                    <a
-                      href="/releases/${encodeURIComponent(row.key)}"
-                      style="font-weight: bold; text-decoration: none;"
-                    >
-                      ${row.title}
+              <td style="min-width: 80px;">
+                <img
+                  src={`/release/${row.source}/${row.key}/${row.images[0]?.ref}/200`}
+                  width="80"
+                  height="80"
+                />
+              </td>
+              <td class="truncate">
+                <a
+                  href={`/releases/${encodeURIComponent(row.key)}`}
+                  style={{ fontWeight: 'bold', textDecoration: 'none' }}
+                >
+                  {row.title}
+                </a>
+                <div>
+                  {row.audiusUser
+                    ? audiusUserLink(row.audiusUser)
+                    : searchLink(row.artists[0]?.name)}
+                </div>
+                <small>
+                  <em title={row.messageTimestamp} class="pico-color-grey-500">
+                    {searchLink(row.labelName)} via{' '}
+                    <a class="plain contrast" href={`?source=${row.source}`}>
+                      {row.source}
                     </a>
-                    <div>
-                      ${row.audiusUser
-                        ? audiusUserLink(row.audiusUser)
-                        : searchLink(row.artists[0]?.name)}
-                    </div>
-                    <small>
-                      <em
-                        title="${row.messageTimestamp}"
-                        class="pico-color-grey-500"
-                      >
-                        ${searchLink(row.labelName)} via
-                        <a
-                          class="plain contrast"
-                          href=${`?source=${row.source}`}
-                        >
-                          ${row.source}
-                        </a>
-                      </em>
-                    </small>
-                  </td>
+                  </em>
+                </small>
+              </td>
 
-                  <td>
-                    ${searchLink(row.genre)}
-                    <br />
-                    <small>${searchLink(row.subGenre)}</small>
-                  </td>
-                  <td>
-                    ${row.releaseType}
-                    <small> (${row.soundRecordings.length})</small>
-                    <br />
-                    <small>${row.releaseDate}</small>
-                  </td>
-                  <td>
-                    ${row.numCleared != undefined &&
-                    html`<div>
-                      <b
-                        title="${row.numCleared} cleared
+              <td>
+                {searchLink(row.genre)}
+                <br />
+                <small>{searchLink(row.subGenre)}</small>
+              </td>
+              <td>
+                {row.releaseType}
+                <small> ({row.soundRecordings.length})</small>
+                <br />
+                <small>{row.releaseDate}</small>
+              </td>
+              <td>
+                {row.numCleared != undefined && (
+                  <div>
+                    <b
+                      title={`${row.numCleared} cleared
 ${row.numNotCleared} not cleared
-${row.soundRecordings.length} tracks"
-                      >
-                        ${(
-                          (row.numCleared / (row.soundRecordings.length || 1)) *
-                          100
-                        ).toFixed() + '%'}
-                      </b>
-                    </div>`}
-                  </td>
-                  <td>
-                    ${row.publishErrorCount > 0 &&
-                    html`<a
-                      href="/releases/${encodeURIComponent(row.key)}/error"
-                      >${row.publishErrorCount}</a
-                    >`}
-                  </td>
-                  <td>
-                    ${row.entityType == 'track' &&
-                    html` <a href="${API_HOST}/v1/full/tracks/${row.entityId}">
-                      ${row.entityId}
-                    </a>`}
-                    ${row.entityType == 'album' &&
-                    html` <a
-                      href="${API_HOST}/v1/full/playlists/${row.entityId}"
+${row.soundRecordings.length} tracks`}
                     >
-                      ${row.entityId}
-                    </a>`}
-                  </td>
-                  <td>${debugLinks(row.xmlUrl, row.key)}</td>
-                </tr>`
-            )}
-          </tbody>
-        </table>
-      `,
-      querySearch || 'Releases'
-    )
+                      {(
+                        (row.numCleared / (row.soundRecordings.length || 1)) *
+                        100
+                      ).toFixed() + '%'}
+                    </b>
+                  </div>
+                )}
+              </td>
+              <td>
+                {row.publishErrorCount > 0 && (
+                  <a href={`/releases/${encodeURIComponent(row.key)}/error`}>
+                    {row.publishErrorCount}
+                  </a>
+                )}
+              </td>
+              <td>
+                {row.entityType == 'track' && (
+                  <a href={`${API_HOST}/v1/full/tracks/${row.entityId}`}>
+                    {row.entityId}
+                  </a>
+                )}
+                {row.entityType == 'album' && (
+                  <a href={`${API_HOST}/v1/full/playlists/${row.entityId}`}>
+                    {row.entityId}
+                  </a>
+                )}
+              </td>
+              <td>{debugLinks(row.xmlUrl, row.key)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Layout2>
   )
 })
 
@@ -428,15 +413,21 @@ app.get('/releases/:key', async (c) => {
     if (!val) return
     const u = new URL('/releases', c.req.url)
     u.searchParams.set('search', `${val}`)
-    return html`<a class="plain contrast" href="${u.toString()}"> ${val} </a>`
+    return (
+      <a class="plain contrast" href={u.toString()}>
+        {val}
+      </a>
+    )
   }
 
   function infoRowLink(key: string, val: string) {
     if (!val) return
-    return html` <tr>
-      <td class="key">${key}</td>
-      <td>${searchLink(val)}</td>
-    </tr>`
+    return (
+      <tr>
+        <td class="key">{key}</td>
+        <td>{searchLink(val)}</td>
+      </tr>
+    )
   }
 
   const parsedRelease = row
@@ -458,100 +449,103 @@ app.get('/releases/:key', async (c) => {
     </tr>`
 
   return c.html(
-    Layout(
-      html`
-        <div style="display: flex; align-items: center;">
-          <div style="flex-grow: 1">
-            <h1 style="margin-bottom: 0">
-              ${parsedRelease.title} ${parsedRelease.subTitle}
+    <Layout2 title={parsedRelease.title}>
+      <>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div style={{ flexGrow: 1 }}>
+            <h1 style={{ marginBottom: 0 }}>
+              {parsedRelease.title} {parsedRelease.subTitle}
             </h1>
-            <h3>
-              ${parsedRelease.artists
-                .slice(0, 1)
-                .map((a) => searchLink(a.name))}
-            </h3>
+            <h3>{searchLink(parsedRelease.artists[0]?.name)}</h3>
           </div>
-          <div>${debugLinks(row.xmlUrl, row.key)}</div>
+          <div>{debugLinks(row.xmlUrl, row.key)}</div>
         </div>
 
-        <div style="display: flex; gap: 20px">
+        <div style={{ display: 'flex', gap: '20px' }}>
           <div>
             <img
-              src="/release/${row.source}/${row.key}/${parsedRelease.images[0]
-                ?.ref}/200"
-              style="width: 200px; height: 200px; display: block; margin-bottom: 10px"
+              src={`/release/${row.source}/${row.key}/${parsedRelease.images[0]?.ref}/200`}
+              style={{
+                width: '200px',
+                height: '200px',
+                display: 'block',
+                marginBottom: '10px',
+              }}
             />
 
-            <table style="width: 100%; font-size: 90%;" class="compact">
-              ${infoRowLink('Source', row.source)}
-              ${infoRowLink('Label', parsedRelease.labelName)}
-              ${infoRowLink('Genre', parsedRelease.genre)}
-              ${infoRowLink('SubGenre', parsedRelease.subGenre)}
-              ${infoRowLink('Release', parsedRelease.releaseDate)}
-              ${infoRowLink(
-                'Parental',
-                parsedRelease.parentalWarningType || ''
-              )}
+            <table style={{ width: '100%', fontSize: '90%' }} class="compact">
+              {infoRowLink('Source', row.source)}
+              {infoRowLink('Label', parsedRelease.labelName)}
+              {infoRowLink('Genre', parsedRelease.genre)}
+              {infoRowLink('SubGenre', parsedRelease.subGenre)}
+              {infoRowLink('Release', parsedRelease.releaseDate)}
+              {infoRowLink('Parental', parsedRelease.parentalWarningType || '')}
             </table>
           </div>
 
-          <div style="flex-grow: 1">
-            ${parsedRelease.soundRecordings.map(
-              (sr) => html`
-                <article style="border-radius: 8px; display: flex; gap: 20px">
-                  <div>
-                    <button
-                      class="outline contrast"
-                      onClick="play('/release/${row.source}/${row.key}/${sr.ref}')"
-                    >
-                      play
-                    </button>
-                  </div>
-                  <div style="flex-grow: 1">
-                    <div style="padding: 10px 0">
-                      <div style="float: right">
-                        ${clears[sr.isrc!] === true && (
-                          <mark class="cleared">Cleared</mark>
-                        )}
-                        ${clears[sr.isrc!] === false && (
-                          <mark class="not-cleared">Not Cleared</mark>
-                        )}
-                      </div>
-                      <h4>${sr.title} ${sr.subTitle}</h4>
+          <div style={{ flexGrow: 1 }}>
+            {parsedRelease.soundRecordings.map((sr) => (
+              <article
+                style={{ borderRadius: '8px', display: 'flex', gap: '20px' }}
+              >
+                <div>
+                  <button
+                    class="outline contrast"
+                    onclick={`play("/release/${row.source}/${row.key}/${sr.ref}")`}
+                  >
+                    play
+                  </button>
+                </div>
+                <div style={{ flexGrow: 1 }}>
+                  <div style={{ padding: '10px 0' }}>
+                    <div style={{ float: 'right' }}>
+                      {clears[sr.isrc!] === true && (
+                        <mark class="cleared">Cleared</mark>
+                      )}
+                      {clears[sr.isrc!] === false && (
+                        <mark class="not-cleared">Not Cleared</mark>
+                      )}
                     </div>
-
-                    <table style="display: block; font-size: 90%;">
-                      <tbody>
-                        ${sr.artists.map(mapArtist('Artist'))}
-                        ${sr.contributors.map(mapArtist('Contributor'))}
-                        ${sr.indirectContributors.map(
-                          mapArtist('Indicrect Contributor')
-                        )}
-                      </tbody>
-                    </table>
+                    <h4>
+                      {sr.title} {sr.subTitle}
+                    </h4>
                   </div>
-                </article>
-              `
-            )}
+                  <table style={{ display: 'block', fontSize: '90%' }}>
+                    <tbody>
+                      {sr.artists.map(mapArtist('Artist'))}
+                      {sr.contributors.map(mapArtist('Contributor'))}
+                      {sr.indirectContributors.map(
+                        mapArtist('Indirect Contributor')
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+            ))}
           </div>
+
           <hr />
 
           <div>
-            ${row.entityType == 'track' &&
-            html` <article>
-              <header>Audius Track</header>
-              <a href="${API_HOST}/v1/full/tracks/${row.entityId}">
-                ${row.entityId}
-              </a>
-            </article>`}
-            ${row.entityType == 'album' &&
-            html` <article>
-              <header>Audius Album</header>
-              <a href="${API_HOST}/v1/full/playlists/${row.entityId}">
-                ${row.entityId}
-              </a>
-            </article>`}
-            ${associatedUser && (
+            {row.entityType === 'track' && (
+              <article>
+                <header>Audius Track</header>
+                <a href={`${API_HOST}/v1/full/tracks/${row.entityId}`}>
+                  {row.entityId}
+                </a>
+              </article>
+            )}
+
+            {row.entityType === 'album' && (
+              <article>
+                <header>Audius Album</header>
+                <a href={`${API_HOST}/v1/full/playlists/${row.entityId}`}>
+                  {row.entityId}
+                </a>
+              </article>
+            )}
+
+            {associatedUser && (
               <article>
                 <header>Audius User</header>
                 <div>
@@ -564,19 +558,22 @@ app.get('/releases/:key', async (c) => {
                 </div>
               </article>
             )}
-            ${isFutureRelease && (
+
+            {isFutureRelease && (
               <div>
                 <mark>Future Release</mark>
               </div>
             )}
-            ${isNoDeal && (
+
+            {isNoDeal && (
               <div>
                 <mark>No Compatible Deal</mark>
               </div>
             )}
+
             <button
-              ${isFutureRelease || isNoDeal ? 'disabled' : ''}
-              onClick="PublishModal.showModal()"
+              disabled={isFutureRelease || isNoDeal}
+              onclick="PublishModal.showModal()"
             >
               Publish
             </button>
@@ -584,12 +581,12 @@ app.get('/releases/:key', async (c) => {
         </div>
 
         <dialog id="PublishModal">
-          <form action="/publish/${releaseId}" method="POST">
+          <form action={`/publish/${releaseId}`} method="post">
             <article>
               <h2>Publish</h2>
               <p>
-                <mark>Warning!</mark>
-                Please verify release date + cleared status.
+                <mark>Warning!</mark> Please verify release date + cleared
+                status.
               </p>
 
               <div>
@@ -597,19 +594,17 @@ app.get('/releases/:key', async (c) => {
                   <label>Audius User</label>
                   <select name="userId">
                     <option value="">Create claimable account</option>
-                    ${allUsers.map((u) => (
+                    {allUsers.map((u) => (
                       <option
                         value={u.id}
-                        selected={u.id == parsedRelease.audiusUser}
+                        selected={u.id === parsedRelease.audiusUser}
                       >
                         {u.name}
                       </option>
                     ))}
                   </select>
 
-                  <label
-                    title="Checking label account will prepend artist to track title."
-                  >
+                  <label title="Checking label account will prepend artist to track title.">
                     <input type="checkbox" name="prependArtist" />
                     Label Account
                   </label>
@@ -623,22 +618,23 @@ app.get('/releases/:key', async (c) => {
                   <label>Audius Genre</label>
                   <select name="audiusGenre" required>
                     <option value="">Select Genre</option>
-                    ${Object.values(Genre)
-                      .filter((g) => g != 'All Genres')
+                    {Object.values(Genre)
+                      .filter((g) => g !== 'All Genres')
                       .map((g) => (
-                        <option selected={g == parsedRelease.audiusGenre}>
+                        <option selected={g === parsedRelease.audiusGenre}>
                           {g}
                         </option>
                       ))}
                   </select>
                 </fieldset>
               </div>
+
               <footer>
-                <div style="display: flex; gap: 10px">
+                <div style={{ display: 'flex', gap: '10px' }}>
                   <button
                     type="button"
                     class="secondary"
-                    onClick="PublishModal.close()"
+                    onclick="PublishModal.close()"
                   >
                     Cancel
                   </button>
@@ -649,48 +645,46 @@ app.get('/releases/:key', async (c) => {
           </form>
         </dialog>
 
-        <div style="margin-top: 100px;"></div>
+        <div style={{ marginTop: '100px' }}></div>
         <div class="playa-wrap">
           <audio id="playa" controls></audio>
         </div>
 
-        <script>
-          function play(url) {
-            playa.onloadstart = () => {
-              console.log('loading...')
+        {html`
+          <script>
+            function play(url) {
+              playa.onloadstart = () => console.log('loading...')
+              playa.oncanplay = () => console.log('OK')
+              if (playa.src.includes(url)) {
+                playa.paused ? playa.play() : playa.pause()
+              } else {
+                playa.src = url
+                playa.play()
+              }
             }
-            playa.oncanplay = () => {
-              console.log('OK')
+          </script>
+
+          <style>
+            .playa-wrap {
+              position: fixed;
+              bottom: 0px;
+              left: 0px;
+              width: 100%;
+              padding: 10px;
             }
-            if (playa.src.includes(url)) {
-              playa.paused ? playa.play() : playa.pause()
-            } else {
-              playa.src = url
-              playa.play()
+            .playa-wrap audio {
+              width: 100%;
             }
-          }
-        </script>
-        <style>
-          .playa-wrap {
-            position: fixed;
-            bottom: 0px;
-            left: 0px;
-            width: 100%;
-            padding: 10px;
-          }
-          .playa-wrap audio {
-            width: 100%;
-          }
-          .cleared {
-            background: lightgreen;
-          }
-          .not-cleared {
-            background: lightpink;
-          }
-        </style>
-      `,
-      parsedRelease.title
-    )
+            .cleared {
+              background: lightgreen;
+            }
+            .not-cleared {
+              background: lightpink;
+            }
+          </style>
+        `}
+      </>
+    </Layout2>
   )
 })
 
@@ -1090,84 +1084,6 @@ function debugLinks(xmlUrl: string, releaseId?: string) {
       <a class="plain secondary" href="/history/${releaseId}">history</a>
       <a class="plain secondary" href="/releases/${releaseId}/publog">publog</a>
     `}
-  `
-}
-
-function Layout(
-  inner: HtmlEscapedString | Promise<HtmlEscapedString>,
-  title?: string
-) {
-  return html`
-    <!doctype html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>${title ? title : 'ddex'}</title>
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
-        />
-        <style>
-          :root {
-            --pico-font-size: 16px;
-            --pico-line-height: 1.3;
-            // --pico-border-radius: 1rem;
-            // --pico-spacing: 0.5rem;
-            // --pico-form-element-spacing-vertical: 0.5rem;
-          }
-          h1 {
-            --pico-typography-spacing-vertical: 0.5rem;
-          }
-          button {
-            --pico-font-weight: 700;
-          }
-          mark {
-            margin-right: 3px;
-          }
-          .bold {
-            font-weight: bold;
-          }
-          .topbar {
-            display: flex; gap: 10px; padding: 10px;
-          }
-          .topbar a {
-            text-decoration: none;
-          }
-          .truncate {
-            max-width: 300px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-          }
-          .hidden {
-            display: none;
-          }
-          a.plain {
-            text-decoration: none;
-          }
-
-          table.compact td {
-            padding: 8px;
-            font-size: 95%;
-          }
-          table.compact td.key {
-            text-transform: uppercase;
-            font-size: 80%;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="topbar">
-          <a href="/"><b>ddex</b></a>
-          <a href="/releases">releases</a>
-          <a href="/users">users</a>
-          <a href="/stats">stats</a>
-          <a href="/report">report</a>
-        </div>
-        <div style="padding: 20px 40px;">${inner}</div>
-      </body>
-    </html>
   `
 }
 

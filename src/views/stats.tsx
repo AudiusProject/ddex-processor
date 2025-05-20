@@ -11,7 +11,7 @@ type StatsRow = {
 
 app.get('/', async (c) => {
   const stats =
-    await sql`select source, count(*) count from releases group by 1`.values()
+    await sql`select source, count(*) count from releases group by 1 order by 2 desc`.values()
 
   return c.html(
     <Layout2 title="stats">

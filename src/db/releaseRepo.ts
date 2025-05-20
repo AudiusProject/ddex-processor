@@ -72,9 +72,9 @@ export const releaseRepo = {
         params.search,
         sql`
         and (
-          "artists"::text like '%' || ${params.search!} || '%'
-          OR "contributors"::text like '%' || ${params.search!} || '%'
-          OR "indirectContributors"::text like '%' || ${params.search!} || '%'
+          "artists"::text ilike '%' || ${params.search!} || '%'
+          OR "contributors"::text ilike '%' || ${params.search!} || '%'
+          OR "indirectContributors"::text ilike '%' || ${params.search!} || '%'
           OR "title" ilike '%' || ${params.search!} || '%'
           OR "labelName" ilike '%' || ${params.search!} || '%'
           OR "genre" ilike '%' || ${params.search!} || '%'

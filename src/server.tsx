@@ -317,7 +317,7 @@ app.get('/releases', async (c) => {
         <tbody style="line-height: 1; white-space: nowrap;">
           {rows.map((row) => (
             <tr>
-              <td style="min-width: 80px;">
+              <td style="min-width: 80px; width: 120px;">
                 <img
                   src={`/release/${row.source}/${row.key}/${row.images[0]?.ref}/200`}
                   width="80"
@@ -498,7 +498,8 @@ app.get('/releases/:key', async (c) => {
                 </div>
                 <div style={{ flexGrow: 1 }}>
                   <div style={{ padding: '10px 0' }}>
-                    <div style={{ float: 'right' }}>
+                    <div style={{ float: 'right', textAlign: 'right' }}>
+                      <pre style="padding: 3px">{sr.isrc}</pre>
                       {clears[sr.isrc!] === true && (
                         <mark class="cleared">Cleared</mark>
                       )}

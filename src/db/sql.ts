@@ -1,7 +1,7 @@
 import postgres from 'postgres'
 
 const conn =
-  process.env.DB_URL || 'postgresql://postgres:example@localhost:40111/ddex1'
+  process.env.DB_URL || 'postgresql://postgres:example@127.0.0.1:40111/ddex1'
 
 export const sql = postgres(conn)
 

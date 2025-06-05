@@ -3,6 +3,8 @@
 Install + run tests:
 
 ```bash
+docker compose up
+
 npm i
 npm test
 ```
@@ -78,13 +80,6 @@ sqlite3 data/dev.db "insert into users (id, handle, name) values ('2fuga', '2FUG
 
 ```bash
 npx tsx cli.ts publish
-```
-
-### nuke db
-
-```bash
-# reset sqlite state
-rm data/dev.db*
 ```
 
 ### set up local s3 cli

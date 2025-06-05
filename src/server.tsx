@@ -28,6 +28,7 @@ import { sources } from './sources'
 import { parseBool } from './util'
 
 import { Genre } from '@audius/sdk'
+import { stringify } from 'csv-stringify/sync'
 import { publogRepo } from './db/publogRepo'
 import { formatDateToYYYYMMDD, getPriorMonth } from './reporting/date_utils'
 import { Layout2 } from './views/layout2'
@@ -211,9 +212,16 @@ app.get('/releases', async (c) => {
   const querySearch = c.req.query('search')
   const queryStatus = c.req.query('status')
   const querySource = c.req.query('source')
-  const limit = parseInt(c.req.query('limit') || '100')
-  const offset = parseInt(c.req.query('offset') || '0')
+  let limit = parseInt(c.req.query('limit') || '100')
+  let offset = parseInt(c.req.query('offset') || '0')
   console.log('query', c.req.query())
+
+  const csvExport = parseBool(c.req.query('csv'))
+  if (csvExport) {
+    limit = 10000
+    offset = 0
+  }
+
   const rows = await releaseRepo.all({
     ...c.req.query(),
     pendingPublish: parseBool(c.req.query('pendingPublish')),
@@ -221,6 +229,15 @@ app.get('/releases', async (c) => {
     limit: limit,
     offset: offset,
   })
+
+  if (csvExport) {
+    const csv = stringify(rows, {
+      header: true,
+      columns: Object.keys(rows[0] || {}),
+    })
+    c.header('Content-Type', 'text/csv')
+    return c.body(csv)
+  }
 
   const showPagination = offset || rows.length == limit
 
@@ -285,7 +302,7 @@ app.get('/releases', async (c) => {
             <a
               role="button"
               class="outline contrast"
-              href="${withQueryParam('offset', offset - limit)}"
+              href={withQueryParam('offset', offset - limit)}
               disabled={offset == 0}
             >
               ⫷
@@ -293,12 +310,22 @@ app.get('/releases', async (c) => {
             <a
               role="button"
               class="outline contrast"
-              href="${withQueryParam('offset', limit + offset)}"
+              href={withQueryParam('offset', limit + offset)}
             >
               ⫸
             </a>
           </div>
         )}
+
+        <div>
+          <a
+            role="button"
+            class="outline contrast"
+            href={withQueryParam('csv', 'true')}
+          >
+            Export CSV
+          </a>
+        </div>
       </div>
 
       <table>

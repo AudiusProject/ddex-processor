@@ -9,7 +9,7 @@ import { basename, dirname, join, resolve } from 'path'
 import sharp from 'sharp'
 import { s3markerRepo } from './db'
 import { parseDdexXml } from './parseDelivery'
-import { BucketConfig, sources } from './sources'
+import { BucketConfig, SourceConfig, sources } from './sources'
 
 type AccessKey = string
 
@@ -36,6 +36,19 @@ export async function pollS3(reset?: boolean) {
       console.log(`skipping non-s3 source: ${sourceConfig.name}`)
       continue
     }
+    await pollS3Source(sourceConfig, reset)
+  }
+}
+
+export async function pollS3Source(
+  sourceConfig: SourceConfig,
+  reset?: boolean
+) {
+  while (true) {
+    if (!sourceConfig.awsBucket) {
+      console.log(`skipping non-s3 source: ${sourceConfig.name}`)
+      continue
+    }
 
     const client = dialS3(sourceConfig)
     const bucket = sourceConfig.awsBucket
@@ -45,7 +58,7 @@ export async function pollS3(reset?: boolean) {
 
     // load prior marker
     if (!reset) {
-      Marker = s3markerRepo.get(bucket)
+      Marker = await s3markerRepo.get(bucket)
     }
 
     // list top level prefixes after marker
@@ -54,26 +67,33 @@ export async function pollS3(reset?: boolean) {
         Bucket: bucket,
         Delimiter: '/',
         Marker,
+        // MaxKeys: 100,
       })
     )
-    const prefixes = result.CommonPrefixes?.map((p) => p.Prefix) as string[]
+    const prefixes = result.CommonPrefixes?.map((p) => p.Prefix).filter(
+      Boolean
+    ) as string[]
     console.log(
       `polling s3 ${bucket} from ${Marker} got ${prefixes?.length} items`
     )
     if (!prefixes) {
-      continue
+      break
     }
 
-    for (const prefix of prefixes) {
-      await scanS3Prefix(sourceName, client, bucket, prefix)
-      Marker = prefix
+    const batchSize = 20
+    for (let i = 0; i < prefixes.length; i += batchSize) {
+      const batch = prefixes.slice(i, i + batchSize)
+      await Promise.all(
+        batch.map(async (prefix) => {
+          await scanS3Prefix(sourceName, client, bucket, prefix)
+        })
+      )
     }
 
     // save marker
-    if (Marker) {
-      console.log('update marker', { bucket, Marker })
-      s3markerRepo.upsert(bucket, Marker)
-    }
+    Marker = prefixes.at(-1)!
+    console.log('update marker', { bucket, Marker })
+    await s3markerRepo.upsert(bucket, Marker)
   }
 }
 
@@ -97,34 +117,37 @@ async function scanS3Prefix(
   for (const c of result.Contents) {
     if (!c.Key) continue
 
-    if (c.Key.toLowerCase().endsWith('.xml')) {
-      const xmlUrl = `s3://` + join(bucket, c.Key)
-      const { Body } = await client.send(
-        new GetObjectCommand({
-          Bucket: bucket,
-          Key: c.Key,
-        })
-      )
-      const xml = await Body?.transformToString()
-      if (xml) {
-        console.log('parsing', xmlUrl)
-        const releases = parseDdexXml(source, xmlUrl, xml) || []
+    const lowerKey = c.Key.toLowerCase()
+    if (!lowerKey.endsWith('.xml') || lowerKey.includes('batchcomplete')) {
+      continue
+    }
 
-        // seed resized images so server doesn't have to do at request time
-        for (const release of releases) {
-          for (const img of release.images) {
-            if (img.fileName && img.filePath) {
-              await readAssetWithCaching(
-                xmlUrl,
-                img.filePath,
-                img.fileName,
-                '200',
-                true
-              )
-            }
-          }
-        }
-      }
+    const xmlUrl = `s3://` + join(bucket, c.Key)
+    const { Body } = await client.send(
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: c.Key,
+      })
+    )
+    const xml = await Body?.transformToString()
+    if (xml) {
+      console.log('parsing', xmlUrl)
+      const releases = (await parseDdexXml(source, xmlUrl, xml)) || []
+
+      // seed resized images so server doesn't have to do at request time
+      // for (const release of releases) {
+      //   for (const img of release.images) {
+      //     if (img.fileName && img.filePath) {
+      //       await readAssetWithCaching(
+      //         xmlUrl,
+      //         img.filePath,
+      //         img.fileName,
+      //         '200',
+      //         true
+      //       )
+      //     }
+      //   }
+      // }
     }
   }
 }

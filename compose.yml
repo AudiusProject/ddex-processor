@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD: example
+    shm_size: '2g'
+    ports:
+      - 127.0.0.1:40111:5432
+
+  adminer:
+    image: adminer
+    ports:
+      - 127.0.0.1:40222:8080

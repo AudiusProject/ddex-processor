@@ -62,7 +62,7 @@ type ReleaseAndSoundRecordingSharedFields = {
   labelName: string
 }
 
-type CopyrightPair = {
+export type CopyrightPair = {
   text: string
   year: string
 }
@@ -181,7 +181,11 @@ export async function parseDdexXmlFile(source: string, xmlUrl: string) {
 }
 
 // actually parse ddex xml
-export function parseDdexXml(source: string, xmlUrl: string, xmlText: string) {
+export async function parseDdexXml(
+  source: string,
+  xmlUrl: string,
+  xmlText: string
+) {
   const $ = cheerio.load(xmlText, { xmlMode: true })
 
   const messageTimestamp = $('MessageCreatedDateTime').first().text()
@@ -194,7 +198,7 @@ export function parseDdexXml(source: string, xmlUrl: string, xmlText: string) {
   const isUpdate = $('UpdateIndicator').text() == 'UpdateMessage'
 
   // todo: would be nice to skip this on reParse
-  xmlRepo.upsert({
+  await xmlRepo.upsert({
     source,
     xmlUrl,
     messageTimestamp,
@@ -205,12 +209,17 @@ export function parseDdexXml(source: string, xmlUrl: string, xmlText: string) {
   } else if (tagName == 'PurgeReleaseMessage') {
     // mark release rows as DeletePending
     const { releaseIds } = parsePurgeXml($)
-    releaseRepo.markForDelete(source, xmlUrl, messageTimestamp, releaseIds)
+    await releaseRepo.markForDelete(
+      source,
+      xmlUrl,
+      messageTimestamp,
+      releaseIds
+    )
   } else if (tagName == 'NewReleaseMessage') {
     // create or replace this release in db
-    const releases = parseReleaseXml(source, $)
+    const releases = await parseReleaseXml(source, $)
     for (const release of releases) {
-      releaseRepo.upsert(source, xmlUrl, messageTimestamp, release)
+      await releaseRepo.upsert(source, xmlUrl, messageTimestamp, release)
     }
     return releases
   } else {
@@ -221,7 +230,7 @@ export function parseDdexXml(source: string, xmlUrl: string, xmlText: string) {
 //
 // parseRelease
 //
-function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
+async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
   function toTexts($doc: CH) {
     return $doc.map((_, el) => $(el).text()).get()
   }
@@ -478,9 +487,9 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
   // parse releases
   //
 
-  const releases = $('Release')
+  const work = $('Release')
     .toArray()
-    .map((el) => {
+    .map(async (el) => {
       const $el = $(el)
 
       const ref = $el.find('ReleaseReference').text()
@@ -528,15 +537,15 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
 
       // resolve audius genre
       release.audiusGenre = resolveAudiusGenre(release.genre, release.subGenre)
-      if (!release.audiusGenre) {
-        release.problems.push(`NoGenre`)
-      }
 
       // resolve audius user (that has authorized this source)
       const artistNames = release.artists.map((a) => a.name)
       const sourceConfig = sources.findByName(source)
       if (sourceConfig) {
-        release.audiusUser = userRepo.match(sourceConfig.ddexKey, artistNames)
+        release.audiusUser = await userRepo.match(
+          sourceConfig.ddexKey,
+          artistNames
+        )
       }
 
       // resolve resources
@@ -561,14 +570,14 @@ function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
         })
 
       // deal or no deal?
-      if (new Date(release.releaseDate) > new Date()) {
-        release.problems.push('FutureRelease')
-      } else if (!release.deals.length) {
+      if (!release.deals.length) {
         release.problems.push('NoDeal')
       }
 
       return release
     })
+
+  const releases = await Promise.all(work)
 
   // resolve any missing images to main release if possible
   const mainRelease = releases.find((r) => r.isMainRelease)

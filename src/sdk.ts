@@ -11,12 +11,16 @@ export function getSdk(sourceConfig: SourceConfig) {
     if (!ddexSecret.startsWith('0x')) {
       ddexSecret = '0x' + ddexSecret
     }
-    sdkCache[ddexKey] = sdk({
-      apiKey: ddexKey,
-      apiSecret: ddexSecret,
-      appName: name,
-      environment: env || 'staging',
-    })
+    try {
+      sdkCache[ddexKey] = sdk({
+        apiKey: ddexKey,
+        apiSecret: ddexSecret,
+        appName: name,
+        environment: env || 'staging',
+      })
+    } catch (e) {
+      console.log('sdk dial error', e)
+    }
   }
 
   return sdkCache[ddexKey]

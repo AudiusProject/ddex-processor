@@ -2,7 +2,7 @@
 stage::
 	npm run build
 	rsync -r --filter=':- .gitignore' . stage-ddex:fut
-	ssh stage-ddex -t 'cd fut && npm i && node_modules/.bin/pm2 start worker && node_modules/.bin/pm2 start ddex'
+	ssh stage-ddex -t 'cd fut && npm i && docker compose up -d && node_modules/.bin/pm2 start worker && node_modules/.bin/pm2 start ddex'
 
 prod::
 	npm run build
@@ -21,3 +21,9 @@ backup.prod::
 	mkdir -p $(FOLDER)
 	time rsync -z prod-ddex:fut/data/* $(FOLDER)
 
+
+adminer::
+	open http://localhost:40222/?pgsql=db&username=postgres
+
+psql::
+	psql postgresql://postgres:example@localhost:40111/ddex1

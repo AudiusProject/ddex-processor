@@ -1,11 +1,12 @@
 # Production Setup
 
-Provision a Ubuntu server.  Makefile assumes
+Provision a Ubuntu server. Makefile assumes
 
 ### Install stuff
 
-* Install [nodejs](https://deb.nodesource.com/)
-* Setup a [Cloudflare Tunne](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-local-tunnel/)
+- Install [nodejs](https://deb.nodesource.com/)
+- Setup a [Cloudflare Tunne](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-local-tunnel/)
+- Install [docker](https://docs.docker.com/engine/install/ubuntu/)
 
 ### Configure tunnel
 
@@ -23,7 +24,7 @@ cloudflared tunnel create ddex-production
 cloudflared tunnel route dns ddex-production ddex.audius.co
 ```
 
-Using UUID, create `~/.cloudflared/config.yml`:
+Then create `~/.cloudflared/config.yml` (you can use tunnel name or UUID):
 
 ```
 url: http://localhost:8989
@@ -34,15 +35,16 @@ If the route setup fails, run `cloudflared tunnel list`, get the UUID and go to 
 
 ### Configure sources
 
-* Create an AWS bucket + AWS keypair with access to said bucket.
-* Create an Audius app in [account settings](https://audius.co/settings).
-* `cp sources.example.json data/sources.json` and populate values.
+- Create an AWS bucket + AWS keypair with access to said bucket.
+- Create an Audius app in [account settings](https://audius.co/settings).
+- `cp sources.example.json data/sources.json` and populate values.
 
 ### Configure env
 
 Create a `.env` file like:
 
 ```bash
+COOKIE_SECRET='openssl rand -hex 16'
 NODE_ENV='production'
 DDEX_URL='https://ddex.example.com'
 ADMIN_HANDLES='user1,user2'
@@ -69,8 +71,31 @@ Any time you change `ecosystem.config.js` you should stop + delete old entries a
 
 ## deploy
 
+This assumes you have ssh aliases setup, like:
+
+```
+Host prod-ddex
+  HostName 10.128.0.44
+  User ubuntu
+  Port 22
+  IdentityFile ~/.ssh/google_compute_engine
+  ForwardAgent yes
+
+
+```
+
 ```bash
 make
 ```
 
+## Giving Admin
 
+```
+ssh prod-ddex
+cd fut
+vim .env
+
+# add handle to ADMIN_HANDLES
+
+pm2 restart ddex
+```

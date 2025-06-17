@@ -1,10 +1,13 @@
 import { beforeAll, expect, test } from 'vitest'
 
 import { ReleaseProcessingStatus, releaseRepo, userRepo } from './db'
+import { pgMigrate } from './db/migrations'
 import { parseDdexXmlFile } from './parseDelivery'
 import { sources } from './sources'
 
 beforeAll(async () => {
+  // some test db stuff
+  await pgMigrate()
   sources.load('./fixtures/sources.test.json')
 })
 
@@ -13,24 +16,16 @@ test('crud', async () => {
   const source = 'crudTest'
 
   // create user for artist matching
-  userRepo.upsert({
+  await userRepo.upsert({
     apiKey: 'crudTestKey',
     id: 'djtheo',
     handle: 'djtheo',
     name: 'DJ Theo',
+    createdAt: new Date(),
   })
 
-  expect(userRepo.findOne({ id: 'djtheo' })).toMatchObject({
-    id: 'djtheo',
-    name: 'DJ Theo',
-  })
-
-  expect(
-    userRepo.findOne({
-      id: 'djtheo',
-      apiKey: 'crudTestKey',
-    })
-  ).toMatchObject({
+  const u = await userRepo.findById('djtheo')
+  expect(u).toMatchObject({
     id: 'djtheo',
     name: 'DJ Theo',
   })
@@ -38,57 +33,71 @@ test('crud', async () => {
   // load 01
   {
     await parseDdexXmlFile(source, 'fixtures/01_delivery.xml')
-    const rr = releaseRepo.get(grid)!
-    expect(rr._parsed?.labelName).toBe('Iron Crown Music')
-    expect(rr._parsed?.soundRecordings[0].title).toBe('Example Song')
-    expect(rr._parsed?.soundRecordings[0].labelName).toBe('Label Name, Inc.')
-    expect(rr._parsed?.soundRecordings[0].duration).toBe(225)
+    const rr = (await releaseRepo.get(grid))!
+    expect(rr.labelName).toBe('Iron Crown Music')
+    expect(rr.soundRecordings[0].title).toBe('Example Song')
+    expect(rr.soundRecordings[0].labelName).toBe('Label Name, Inc.')
+    expect(rr.soundRecordings[0].duration).toBe(225)
     expect(rr.status).toBe(ReleaseProcessingStatus.PublishPending)
     expect(rr.source).toBe('crudTest')
   }
 
   // simulate publish
-  releaseRepo.update({ key: grid, status: ReleaseProcessingStatus.Published })
+  await releaseRepo.update({
+    key: grid,
+    status: ReleaseProcessingStatus.Published,
+  })
 
   // TODO: update-support
   // load 02 update
   await parseDdexXmlFile(source, 'fixtures/02_update.xml')
-  const rr = releaseRepo.get(grid)!
-  expect(rr._parsed?.soundRecordings[0].title).toBe('Updated Example Song')
+  const rr = (await releaseRepo.get(grid))!
+  expect(rr.soundRecordings[0].title).toBe('Updated Example Song')
   expect(rr.status).toBe(ReleaseProcessingStatus.PublishPending)
 
   // simulate publish
-  releaseRepo.update({ key: grid, status: ReleaseProcessingStatus.Published })
+  await releaseRepo.update({
+    key: grid,
+    status: ReleaseProcessingStatus.Published,
+  })
 
   // reprocess older 01 .. should be a noop
   {
     await parseDdexXmlFile(source, 'fixtures/01_delivery.xml')
-    const rr = releaseRepo.get(grid)!
-    expect(rr._parsed?.soundRecordings[0].title).toBe('Updated Example Song')
+    const rr = (await releaseRepo.get(grid))!
+    expect(rr.soundRecordings[0].title).toBe('Updated Example Song')
     expect(rr.status).toBe(ReleaseProcessingStatus.Published)
   }
 
   // load 03 delete
   {
     await parseDdexXmlFile(source, 'fixtures/03_delete.xml')
-    const rr = releaseRepo.get(grid)!
+    const rr = (await releaseRepo.get(grid))!
     expect(rr.status).toBe(ReleaseProcessingStatus.DeletePending)
   }
 
   // simulate delete
-  releaseRepo.update({ key: grid, status: ReleaseProcessingStatus.Deleted })
+  await releaseRepo.update({
+    key: grid,
+    status: ReleaseProcessingStatus.Deleted,
+  })
 
-  // re-load 03 delete... should be noop
+  {
+    const rr = (await releaseRepo.get(grid))!
+    expect(rr.status).toBe(ReleaseProcessingStatus.Deleted)
+  }
+
+  // re-load 03 delete...
   {
     await parseDdexXmlFile(source, 'fixtures/03_delete.xml')
-    const rr = releaseRepo.get(grid)!
-    expect(rr.status).toBe(ReleaseProcessingStatus.Deleted)
+    const rr = (await releaseRepo.get(grid))!
+    expect(rr.status).toBe(ReleaseProcessingStatus.DeletePending)
   }
 
   // ----------------
   // no deal as takedown:
   // track is in a published state
-  releaseRepo.update({
+  await releaseRepo.update({
     key: grid,
     status: ReleaseProcessingStatus.Published,
     entityType: 'track',
@@ -98,8 +107,8 @@ test('crud', async () => {
   // update arrives without a deal
   {
     await parseDdexXmlFile(source, 'fixtures/04_no_deal.xml')
-    const rr = releaseRepo.get(grid)!
-    expect(rr._parsed?.soundRecordings[0].title).toBe('Updated Example Song')
+    const rr = (await releaseRepo.get(grid))!
+    expect(rr.soundRecordings[0].title).toBe('Updated Example Song')
     expect(rr.status).toBe(ReleaseProcessingStatus.DeletePending)
   }
 })

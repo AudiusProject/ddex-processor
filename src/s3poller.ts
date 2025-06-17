@@ -67,7 +67,6 @@ export async function pollS3Source(
         Bucket: bucket,
         Delimiter: '/',
         Marker,
-        // MaxKeys: 100,
       })
     )
     const prefixes = result.CommonPrefixes?.map((p) => p.Prefix).filter(
@@ -133,21 +132,6 @@ async function scanS3Prefix(
     if (xml) {
       console.log('parsing', xmlUrl)
       const releases = (await parseDdexXml(source, xmlUrl, xml)) || []
-
-      // seed resized images so server doesn't have to do at request time
-      // for (const release of releases) {
-      //   for (const img of release.images) {
-      //     if (img.fileName && img.filePath) {
-      //       await readAssetWithCaching(
-      //         xmlUrl,
-      //         img.filePath,
-      //         img.fileName,
-      //         '200',
-      //         true
-      //       )
-      //     }
-      //   }
-      // }
     }
   }
 }

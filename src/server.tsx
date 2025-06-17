@@ -242,7 +242,7 @@ app.get('/releases', async (c) => {
   const showPagination = offset || rows.length == limit
 
   function withQueryParam(k: string, v: any) {
-    const u = new URL(c.req.url)
+    const u = requestUrl(c)
     u.searchParams.set(k, v)
     if (k != 'offset') {
       u.searchParams.delete('offset')
@@ -1045,6 +1045,25 @@ app.post('/report', async (c) => {
     'Content-Disposition': `attachment; filename="${fileName}"`,
   })
 })
+
+app.get('/debug', async (c) => {
+  const forwardedProto = c.req.header('x-forwarded-proto')
+  const u = requestUrl(c)
+  return c.json({
+    rawUrl: c.req.url,
+    url: u.toString(),
+    forwardedProto,
+  })
+})
+
+function requestUrl(c: Context): URL {
+  const u = new URL(c.req.url)
+  const forwardedProto = c.req.header('x-forwarded-proto')
+  if (forwardedProto) {
+    u.protocol = forwardedProto
+  }
+  return u
+}
 
 export type JwtUser = {
   userId: string

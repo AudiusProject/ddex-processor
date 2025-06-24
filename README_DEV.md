@@ -6,7 +6,7 @@ Install + run tests:
 docker compose up
 
 npm i
-npm test
+make test
 ```
 
 Create `.env` file like:

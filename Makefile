@@ -10,6 +10,11 @@ prod::
 	ssh prod-ddex -t 'cd fut && npm i && node_modules/.bin/pm2 start worker && node_modules/.bin/pm2 start ddex'
 
 
+test::
+	docker compose -f compose.test.yml down --volumes && docker compose -f compose.test.yml up -d
+	 DB_URL=postgres://postgres:test@127.0.0.1:40112/postgres npm run test
+
+
 DATE := $(shell date +%Y-%m-%d)
 STAGE_FOLDER := backups/stage/$(DATE)
 backup.stage::

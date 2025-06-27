@@ -30,5 +30,13 @@ backup.prod::
 adminer::
 	open http://localhost:40222/?pgsql=db&username=postgres
 
+reset-database::
+	PGPASSWORD=example psql \
+		-U postgres \
+		-d postgres \
+		-p 40111 \
+		-h 127.0.0.1 \
+		-c "drop schema public cascade; create schema public;"
+
 psql::
 	psql postgresql://postgres:example@localhost:40111/ddex1

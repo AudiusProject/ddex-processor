@@ -480,7 +480,6 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
   $('ResourceList > Image')
     .toArray()
     .reduce(ddexResourceReducer, imageResources)
-  console.log('imageResources', imageResources)
 
   $('ResourceList > Text').toArray().reduce(ddexResourceReducer, textResources)
 

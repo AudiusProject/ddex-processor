@@ -69,7 +69,6 @@ export async function pollS3Source(
         Marker,
       })
     )
-    console.log(result)
     
     const prefixes = result.CommonPrefixes?.map((p) => p.Prefix).filter(
       Boolean

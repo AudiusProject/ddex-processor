@@ -56,6 +56,7 @@ type ReleaseAndSoundRecordingSharedFields = {
   copyrightLine?: CopyrightPair
   producerCopyrightLine?: CopyrightPair
   parentalWarningType?: string
+  artistsWip: string
   artists: DDEXContributor[]
   contributors: DDEXContributor[]
   indirectContributors: DDEXContributor[]
@@ -414,6 +415,15 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
   const imageResources: Record<string, DDEXResource> = {}
   const textResources: Record<string, DDEXResource> = {}
 
+  const partList: Record<string, string> = {}
+
+  $('PartyList > Party').each((_, el) => {
+    const $el = $(el)
+    const ref = $el.find('PartyReference').text()
+    const name = $el.find('FullName').text()
+    partList[ref] = name
+  })
+
   $('ResourceList > SoundRecording').each((_, el) => {
     const $el = $(el)
 
@@ -427,6 +437,7 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
       fileName: $el.find('FileName:first').text(),
       title: $el.find('TitleText:first').text(),
       subTitle: $el.find('SubTitle:first').text(),
+      artistsWip: $el.find('DisplayArtistName').text(),
       artists: parseContributor('DisplayArtist', $el),
       contributors: parseContributor('ResourceContributor', $el),
       indirectContributors: parseContributor(
@@ -449,6 +460,8 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
       producerCopyrightLine: pline($el),
       parentalWarningType: toText($el.find('ParentalWarningType')),
     }
+
+    console.log(recording)
 
     const rightsController = $el.find('RightsController').first()
     if (rightsController.length) {
@@ -508,7 +521,7 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
 
       const release: DDEXRelease = {
         ref,
-        title: $el.find('ReferenceTitle TitleText').text(),
+        title: $el.find('ReferenceTitle TitleText, Release TitleText').text(),
         subTitle: $el.find('ReferenceTitle SubTitle').text(),
         artists: parseContributor('DisplayArtist', $el),
         contributors: parseContributor('ResourceContributor', $el),
@@ -550,7 +563,12 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
 
       // resolve resources
       $el
-        .find('ReleaseResourceReferenceList > ReleaseResourceReference')
+        .find(
+          `
+          ReleaseResourceReferenceList > ReleaseResourceReference,
+          ResourceGroup ReleaseResourceReference
+          `
+        )
         .each((_, el) => {
           const ref = $(el).text()
 

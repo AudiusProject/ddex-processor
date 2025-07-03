@@ -761,7 +761,7 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
 
       // resolve resources
       const resourceSelector = isDdex40 
-        ? 'ResourceGroup ReleaseResourceReference, ResourceGroupContentItem > ReleaseResourceReference'
+        ? 'ResourceGroup ReleaseResourceReference, ResourceGroupContentItem > ReleaseResourceReference, LinkedReleaseResourceReference'
         : 'ReleaseResourceReferenceList > ReleaseResourceReference, ResourceGroup ReleaseResourceReference'
       
       $el

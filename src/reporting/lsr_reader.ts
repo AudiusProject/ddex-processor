@@ -19,7 +19,16 @@ type LsrRow = {
 }
 
 export async function pollForNewLSRFiles() {
-  const { mri } = sources.reporting()
+  const reporting = sources.reporting()
+  if (!reporting) {
+    console.log('No reporting source found')
+    return
+  }
+  const { mri } = reporting
+  if (!mri) {
+    console.log('No MRI source found')
+    return
+  }
   const client = dialS3(mri)
   const bucket = mri.awsBucket
   const result = await client.send(

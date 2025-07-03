@@ -3,7 +3,7 @@
 Install + run tests:
 
 ```bash
-docker compose up
+docker compose up -d
 
 npm i
 make test
@@ -17,6 +17,8 @@ NODE_ENV = 'staging'
 DDEX_URL = 'https://localhost:8989'
 ADMIN_HANDLES = 'user1,user2'
 SKIP_SDK_PUBLISH='true'
+DB_URL='postgresql://postgres:example@127.0.0.1:40111/postgres'
+DISCOVERY_DB=
 ```
 
 Create `data/sources.json` file like:
@@ -52,11 +54,18 @@ npm run dev
 - do oauth
 - visit http://localhost:8989/releases - see two releases from initial CLI run above
 
-If you have setup an S3 source in `data/sources.json`... you can run worker to crawl buckets and see results locally:
+If you have setup an S3 source in `data/sources.json`, you can run the worker to crawl buckets and see results locally:
 
 ```bash
-npx tsx cli worker
+npm run worker
 ```
+
+If you want to delete the state and re-crawl from the start
+
+```bash
+make reset-database
+```
+
 
 ---
 

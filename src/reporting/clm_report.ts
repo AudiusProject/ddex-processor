@@ -8,6 +8,17 @@ import { dialS3 } from '../s3poller'
 import { sources } from '../sources'
 
 export async function clmReport() {
+  const reporting = sources.reporting()
+  if (!reporting) {
+    console.log('No reporting source found')
+    return
+  }
+  const { mri } = reporting
+  if (!mri) {
+    console.log('No MRI source found')
+    return
+  }
+
   const markerKey = 'report_clm'
   let marker = (await s3markerRepo.get(markerKey)) || '2024-10-26'
 
@@ -78,20 +89,17 @@ export async function clmReport() {
   console.log(`wrote reports/${fileName}`)
 
   // push to S3
-  const { mri } = sources.reporting()
-  if (mri) {
-    const s3Client = dialS3(mri)
-    const key = `inputs/clm/${fileName}`
-    await s3Client.send(
-      new PutObjectCommand({
-        Bucket: mri.awsBucket,
-        Key: key,
-        Body: result,
-        ContentType: 'text/csv',
-      })
-    )
-    console.log(`wrote to s3. bucket=${mri.awsBucket} key=${key}`)
-  }
+  const s3Client = dialS3(mri)
+  const key = `inputs/clm/${fileName}`
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: mri.awsBucket,
+      Key: key,
+      Body: result,
+      ContentType: 'text/csv',
+    })
+  )
+  console.log(`wrote to s3. bucket=${mri.awsBucket} key=${key}`)
 
   // update marker
   console.log(`Update marker ${markerKey}=${marker}`)

@@ -69,51 +69,64 @@ export async function pollS3Source(
         Marker,
       })
     )
+    
     const prefixes = result.CommonPrefixes?.map((p) => p.Prefix).filter(
       Boolean
     ) as string[]
+    
     console.log(
-      `polling s3 ${bucket} from ${Marker} got ${prefixes?.length} items`
+      `polling s3 ${bucket} from ${Marker} got ${prefixes?.length || 0} prefixes and ${result.Contents?.length || 0} files`
     )
-    if (!prefixes) {
+
+    // Handle case where there are common prefixes (folder structure)
+    if (prefixes && prefixes.length > 0) {
+      const batchSize = 20
+      for (let i = 0; i < prefixes.length; i += batchSize) {
+        const batch = prefixes.slice(i, i + batchSize)
+        await Promise.all(
+          batch.map(async (prefix) => {
+            await scanS3Prefix(sourceName, client, bucket, prefix)
+          })
+        )
+      }
+      
+      // save marker for prefixes
+      Marker = prefixes.at(-1)!
+      console.log('update marker', { bucket, Marker })
+      await s3markerRepo.upsert(bucket, Marker)
+    }
+    // Handle case where files are at root level (no prefixes)
+    else if (result.Contents && result.Contents.length > 0) {
+      // Process files directly at root level using the same logic
+      await processS3Contents(sourceName, client, bucket, result.Contents)
+
+      // Update marker to last processed file key
+      const lastKey = result.Contents.at(-1)?.Key
+      if (lastKey) {
+        console.log('update marker', { bucket, Marker: lastKey })
+        await s3markerRepo.upsert(bucket, lastKey)
+      }
+
+      // Break if not truncated (no more files)
+      if (!result.IsTruncated) {
+        break
+      }
+    }
+    else {
+      // No prefixes and no contents, we're done
       break
     }
-
-    const batchSize = 20
-    for (let i = 0; i < prefixes.length; i += batchSize) {
-      const batch = prefixes.slice(i, i + batchSize)
-      await Promise.all(
-        batch.map(async (prefix) => {
-          await scanS3Prefix(sourceName, client, bucket, prefix)
-        })
-      )
-    }
-
-    // save marker
-    Marker = prefixes.at(-1)!
-    console.log('update marker', { bucket, Marker })
-    await s3markerRepo.upsert(bucket, Marker)
   }
 }
 
-// recursively scan a prefix for xml files
-async function scanS3Prefix(
+// Helper function to process S3 objects (XML files)
+async function processS3Contents(
   source: string,
   client: S3Client,
   bucket: string,
-  prefix: string
+  contents: any[]
 ) {
-  const result = await client.send(
-    new ListObjectsCommand({
-      Bucket: bucket,
-      Prefix: prefix,
-    })
-  )
-  if (!result.Contents?.length) {
-    return
-  }
-
-  for (const c of result.Contents) {
+  for (const c of contents) {
     if (!c.Key) continue
 
     const lowerKey = c.Key.toLowerCase()
@@ -134,6 +147,26 @@ async function scanS3Prefix(
       const releases = (await parseDdexXml(source, xmlUrl, xml)) || []
     }
   }
+}
+
+// recursively scan a prefix for xml files
+async function scanS3Prefix(
+  source: string,
+  client: S3Client,
+  bucket: string,
+  prefix: string
+) {
+  const result = await client.send(
+    new ListObjectsCommand({
+      Bucket: bucket,
+      Prefix: prefix,
+    })
+  )
+  if (!result.Contents?.length) {
+    return
+  }
+
+  await processS3Contents(source, client, bucket, result.Contents)
 }
 
 //

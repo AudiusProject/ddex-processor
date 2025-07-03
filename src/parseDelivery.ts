@@ -198,7 +198,7 @@ export async function parseDdexXml(
   const isUpdate = $('UpdateIndicator').text() == 'UpdateMessage'
 
   // Detect DDEX version
-  const isDdex40 = rawTagName.includes('ernm:') || xmlText.includes('http://ddex.net/xml/ern/4')
+  const isDdex40 = xmlText.includes('http://ddex.net/xml/ern/4')
 
   // todo: would be nice to skip this on reParse
   await xmlRepo.upsert({
@@ -256,7 +256,7 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
       const genreText = toText($el.find('Genre > GenreText'))
       return [genreText || '', '']
     } else {
-      // DDEX 3.8 structure
+      // DDEX 3.8 structure - original working logic
       const genres = toTexts($el.find('GenreText'))
       let subGenres = toTexts($el.find('SubGenre'))
       if (!subGenres.length) {
@@ -302,7 +302,7 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
           })
       }
     } else {
-      // DDEX 3.8 structure
+      // DDEX 3.8 structure - original working logic
       const roleTagName =
         tagName == 'DisplayArtist' ? 'ArtistRole' : `${tagName}Role`
 
@@ -329,7 +329,7 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
     $('PartyList > Party').each((_, el) => {
       const $el = $(el)
       const ref = $el.find('PartyReference').text()
-      const name = $el.find('PartyName > FullName').text()
+      const name = $el.find('PartyName').first().find('FullName').text()
       partList[ref] = name
     })
   } else {
@@ -472,7 +472,7 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
 
         const cmt = $el.find('CommercialModelType')
         const commercialModelType = cmt.attr('UserDefinedValue') || cmt.text()
-        const usageTypes = toTexts($el.find('UseType'))
+        const usageTypes = toTexts($el.find('Usage > UseType'))
         const territoryCode = toTexts($el.find('TerritoryCode'))
         const validityStartDate = $el.find('ValidityPeriod > StartDate').text()
         const validityEndDate = $el.find('ValidityPeriod > EndDate').text()
@@ -608,17 +608,29 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
         ? $el.find('SoundRecordingEdition > ResourceId > ISRC').text()
         : $el.find('ISRC').text(),
 
-      filePath: isDdex40
-        ? $el.find('SoundRecordingEdition > TechnicalDetails > DeliveryFile > File > URI').text()
-        : $el.find('FilePath:first').text(),
-      fileName: isDdex40
-        ? $el.find('SoundRecordingEdition > TechnicalDetails > DeliveryFile > File > URI').text().split('/').pop() || ''
-        : $el.find('FileName:first').text(),
+      filePath: (() => {
+        if (isDdex40) {
+          const fullUri = $el.find('SoundRecordingEdition > TechnicalDetails > DeliveryFile > File > URI').text()
+          const lastSlashIndex = fullUri.lastIndexOf('/')
+          return lastSlashIndex !== -1 ? fullUri.substring(0, lastSlashIndex + 1) : ''
+        } else {
+          return $el.find('FilePath:first').text()
+        }
+      })(),
+      fileName: (() => {
+        if (isDdex40) {
+          const fullUri = $el.find('SoundRecordingEdition > TechnicalDetails > DeliveryFile > File > URI').text()
+          const lastSlashIndex = fullUri.lastIndexOf('/')
+          return lastSlashIndex !== -1 ? fullUri.substring(lastSlashIndex + 1) : fullUri
+        } else {
+          return $el.find('FileName:first').text()
+        }
+      })(),
       title: isDdex40
-        ? $el.find('DisplayTitle > TitleText:first').text()
+        ? $el.find('DisplayTitle > TitleText').text()
         : $el.find('TitleText:first').text(),
       subTitle: isDdex40
-        ? $el.find('DisplayTitle > SubTitle:first').text()
+        ? $el.find('DisplayTitle > SubTitle').text()
         : $el.find('SubTitle:first').text(),
       artists: parseContributor('DisplayArtist', $el),
       contributors: parseContributor('ResourceContributor', $el),
@@ -667,12 +679,24 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
   function ddexResourceReducer(acc: Record<string, DDEXResource>, el: any) {
     const $el = $(el)
     const ref = $el.find('ResourceReference').text()
-    const filePath = isDdex40
-      ? $el.find('TechnicalDetails > File > URI').text()
-      : $el.find('FilePath').text()
-    const fileName = isDdex40
-      ? filePath.split('/').pop() || ''
-      : $el.find('FileName').text()
+    
+    let filePath: string
+    let fileName: string
+    
+    if (isDdex40) {
+      const fullUri = $el.find('TechnicalDetails > File > URI').text()
+      const lastSlashIndex = fullUri.lastIndexOf('/')
+      if (lastSlashIndex !== -1) {
+        filePath = fullUri.substring(0, lastSlashIndex + 1) // Include the trailing slash
+        fileName = fullUri.substring(lastSlashIndex + 1)
+      } else {
+        filePath = ''
+        fileName = fullUri
+      }
+    } else {
+      filePath = $el.find('FilePath').text()
+      fileName = $el.find('FileName').text()
+    }
     
     acc[ref] = { ref, filePath, fileName }
     return acc
@@ -715,7 +739,7 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
         ref,
         title: isDdex40
           ? $el.find('DisplayTitle > TitleText').text()
-          : $el.find('ReferenceTitle TitleText, Release TitleText').text(),
+          : $el.find('ReferenceTitle TitleText').text(),
         subTitle: isDdex40
           ? $el.find('DisplayTitle > SubTitle').text()
           : $el.find('ReferenceTitle SubTitle').text(),
@@ -762,7 +786,7 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
       // resolve resources
       const resourceSelector = isDdex40 
         ? 'ResourceGroup ReleaseResourceReference, ResourceGroupContentItem > ReleaseResourceReference, LinkedReleaseResourceReference'
-        : 'ReleaseResourceReferenceList > ReleaseResourceReference, ResourceGroup ReleaseResourceReference'
+        : 'ReleaseResourceReferenceList > ReleaseResourceReference'
       
       $el
         .find(resourceSelector)

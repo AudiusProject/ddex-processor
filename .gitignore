@@ -9,3 +9,4 @@ reports
 local-storage
 
 src/reporting/data/*
+data

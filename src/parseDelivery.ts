@@ -197,6 +197,9 @@ export async function parseDdexXml(
   ].find((n) => rawTagName.includes(n))
   const isUpdate = $('UpdateIndicator').text() == 'UpdateMessage'
 
+  // Detect DDEX version
+  const isDdex40 = xmlText.includes('http://ddex.net/xml/ern/4')
+
   // todo: would be nice to skip this on reParse
   await xmlRepo.upsert({
     source,
@@ -217,7 +220,7 @@ export async function parseDdexXml(
     )
   } else if (tagName == 'NewReleaseMessage') {
     // create or replace this release in db
-    const releases = await parseReleaseXml(source, $)
+    const releases = await parseReleaseXml(source, $, isDdex40)
     for (const release of releases) {
       await releaseRepo.upsert(source, xmlUrl, messageTimestamp, release)
     }
@@ -230,7 +233,7 @@ export async function parseDdexXml(
 //
 // parseRelease
 //
-async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
+async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: boolean) {
   function toTexts($doc: CH) {
     return $doc.map((_, el) => $(el).text()).get()
   }
@@ -248,12 +251,19 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
   }
 
   function parseGenres($el: CH): [genre: string, subGenre: string] {
-    const genres = toTexts($el.find('GenreText'))
-    let subGenres = toTexts($el.find('SubGenre'))
-    if (!subGenres.length) {
-      subGenres = genres.slice(1)
+    if (isDdex40) {
+      // DDEX 4.0 structure
+      const genreText = toText($el.find('Genre > GenreText'))
+      return [genreText || '', '']
+    } else {
+      // DDEX 3.8 structure - original working logic
+      const genres = toTexts($el.find('GenreText'))
+      let subGenres = toTexts($el.find('SubGenre'))
+      if (!subGenres.length) {
+        subGenres = genres.slice(1)
+      }
+      return [genres[0] || '', subGenres[0] || '']
     }
-    return [genres[0] || '', subGenres[0] || '']
   }
 
   function parseContributor(
@@ -263,137 +273,310 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
       | 'IndirectResourceContributor',
     $el: CH
   ): DDEXContributor[] {
-    const roleTagName =
-      tagName == 'DisplayArtist' ? 'ArtistRole' : `${tagName}Role`
+    if (isDdex40) {
+      // DDEX 4.0 structure
+      if (tagName === 'DisplayArtist') {
+        return $el
+          .find('DisplayArtist')
+          .toArray()
+          .map((el) => {
+            const partyRef = $(el).find('ArtistPartyReference').text()
+            const role = $(el).find('DisplayArtistRole').text()
+            return {
+              name: partList[partyRef] || partyRef,
+              role: role,
+            }
+          })
+      } else if (tagName === 'ResourceContributor' || tagName === 'IndirectResourceContributor') {
+        return $el
+          .find('Contributor')
+          .toArray()
+          .map((el) => {
+            const partyRef = $(el).find('ContributorPartyReference').text()
+            const roleTag = $(el).find('Role').first()
+            const role = roleTag.attr('UserDefinedValue') || roleTag.text()
+            return {
+              name: partList[partyRef] || partyRef,
+              role: role,
+            }
+          })
+      }
+    } else {
+      // DDEX 3.8 structure - original working logic
+      const roleTagName =
+        tagName == 'DisplayArtist' ? 'ArtistRole' : `${tagName}Role`
 
-    return $el
-      .find(tagName)
-      .toArray()
-      .map((el) => {
-        const roleTag = $(el).find(roleTagName).first()
-        return {
-          name: toText($(el).find('FullName')),
-          role: roleTag.attr('UserDefinedValue') || roleTag.text(),
-        }
-      })
+      return $el
+        .find(tagName)
+        .toArray()
+        .map((el) => {
+          const roleTag = $(el).find(roleTagName).first()
+          return {
+            name: toText($(el).find('FullName')),
+            role: roleTag.attr('UserDefinedValue') || roleTag.text(),
+          }
+        })
+    }
+    return []
+  }
+
+  //
+  // Build party resolution map for DDEX 4.0
+  //
+  const partList: Record<string, string> = {}
+
+  if (isDdex40) {
+    $('PartyList > Party').each((_, el) => {
+      const $el = $(el)
+      const ref = $el.find('PartyReference').text()
+      const name = $el.find('PartyName').first().find('FullName').text()
+      partList[ref] = name
+    })
+  } else {
+    // Legacy: For DDEX 3.8, build the existing partyList
+    $('PartyList > Party').each((_, el) => {
+      const $el = $(el)
+      const ref = $el.find('PartyReference').text()
+      const name = $el.find('FullName').text()
+      partList[ref] = name
+    })
   }
 
   //
   // parse deals
   //
   const releaseDeals: Record<string, AudiusSupportedDeal[]> = {}
-  $('ReleaseDeal').each((_, el) => {
-    const $el = $(el)
-    const ref = $el.find('DealReleaseReference').text()
-    $el.find('DealTerms').each((_, el) => {
+  
+  if (isDdex40) {
+    // DDEX 4.0 structure: DealList > ReleaseDeal > Deal > DealTerms
+    $('DealList > ReleaseDeal').each((_, el) => {
       const $el = $(el)
+      const ref = $el.find('ReleaseReference').text()
+      
+      $el.find('Deal > DealTerms').each((_, el) => {
+        const $el = $(el)
 
-      const cmt = $el.find('CommercialModelType')
-      const commercialModelType = cmt.attr('UserDefinedValue') || cmt.text()
-      const usageTypes = toTexts($el.find('UseType'))
-      const territoryCode = toTexts($el.find('TerritoryCode'))
-      const validityStartDate = $el.find('ValidityPeriod > StartDate').text()
-      const validityEndDate = $el.find('ValidityPeriod > EndDate').text()
+        const cmt = $el.find('CommercialModelType')
+        const commercialModelType = cmt.attr('UserDefinedValue') || cmt.text()
+        const usageTypes = toTexts($el.find('UseType'))
+        const territoryCode = toTexts($el.find('TerritoryCode'))
+        const validityStartDate = $el.find('ValidityPeriod > StartDateTime').text()
+        const validityEndDate = $el.find('ValidityPeriod > EndDateTime').text()
 
-      // only consider Worldwide
-      const isWorldwide = territoryCode.includes('Worldwide')
-      if (!isWorldwide) {
-        return
-      }
-
-      // check date range
-      {
-        const startDate = new Date(validityStartDate)
-        const endDate = new Date(validityEndDate)
-        const now = new Date()
-        if (startDate && now < startDate) {
+        // only consider Worldwide
+        const isWorldwide = territoryCode.includes('Worldwide') || territoryCode.length > 100 // Many territories listed means worldwide
+        if (!isWorldwide) {
           return
         }
-        if (endDate && now > endDate) {
-          return
+
+        // check date range
+        {
+          const startDate = new Date(validityStartDate)
+          const endDate = new Date(validityEndDate)
+          const now = new Date()
+          if (startDate && now < startDate) {
+            return
+          }
+          if (endDate && now > endDate) {
+            return
+          }
         }
-      }
 
-      // add deal
-      function addDeal(deal: AudiusSupportedDeal) {
-        releaseDeals[ref] ||= []
-        releaseDeals[ref].push(deal)
-      }
-
-      const common: DealFields = {
-        forStream:
-          usageTypes.includes('OnDemandStream') ||
-          usageTypes.includes('Stream'),
-        forDownload: usageTypes.includes('PermanentDownload'),
-        validityStartDate,
-        validityEndDate,
-      }
-
-      if (commercialModelType == 'FreeOfChargeModel') {
-        addDeal({
-          ...common,
-          audiusDealType: 'Free',
-        })
-      } else if (commercialModelType == 'PayAsYouGoModel') {
-        const deal: DealPayGated = {
-          ...common,
-          audiusDealType: 'PayGated',
+        // add deal
+        function addDeal(deal: AudiusSupportedDeal) {
+          releaseDeals[ref] ||= []
+          releaseDeals[ref].push(deal)
         }
-        const priceUsd = parseFloat(
-          $el.find('WholesalePricePerUnit[CurrencyCode="USD"]').text()
-        )
-        if (priceUsd) {
-          deal.priceUsd = priceUsd
-        }
-        addDeal(deal)
-      } else if (
-        commercialModelType == 'FollowGated' ||
-        commercialModelType == 'TipGated'
-      ) {
-        addDeal({
-          ...common,
-          audiusDealType: commercialModelType,
-        })
-      } else if (commercialModelType == 'NFTGated') {
-        const chain = $el.find('Chain').text()
-        const address = $el.find('Address').text()
-        const name = $el.find('Name').text()
-        const imageUrl = $el.find('ImageUrl').text()
-        const externalLink = $el.find('ExternalLink').text()
 
-        // eth specific
-        const standard = $el.find('Standard').text()
-        const slug = $el.find('Slug').text()
-
-        switch (chain) {
-          case 'eth':
-            addDeal({
-              ...common,
-              audiusDealType: 'NFTGated',
-              chain,
-              address,
-              name,
-              imageUrl,
-              externalLink,
-              standard,
-              slug,
-            })
-            break
-          case 'sol':
-            addDeal({
-              ...common,
-              audiusDealType: 'NFTGated',
-              chain,
-              address,
-              name,
-              imageUrl,
-              externalLink,
-            })
-            break
+        const common: DealFields = {
+          forStream:
+            usageTypes.includes('OnDemandStream') ||
+            usageTypes.includes('Stream'),
+          forDownload: usageTypes.includes('PermanentDownload'),
+          validityStartDate,
+          validityEndDate,
         }
-      }
+
+        if (commercialModelType == 'FreeOfChargeModel') {
+          addDeal({
+            ...common,
+            audiusDealType: 'Free',
+          })
+        } else if (commercialModelType == 'PayAsYouGoModel') {
+          const deal: DealPayGated = {
+            ...common,
+            audiusDealType: 'PayGated',
+          }
+          const priceUsd = parseFloat(
+            $el.find('WholesalePricePerUnit[CurrencyCode="USD"]').text()
+          )
+          if (priceUsd) {
+            deal.priceUsd = priceUsd
+          }
+          addDeal(deal)
+        } else if (
+          commercialModelType == 'FollowGated' ||
+          commercialModelType == 'TipGated'
+        ) {
+          addDeal({
+            ...common,
+            audiusDealType: commercialModelType,
+          })
+        } else if (commercialModelType == 'NFTGated') {
+          const chain = $el.find('Chain').text()
+          const address = $el.find('Address').text()
+          const name = $el.find('Name').text()
+          const imageUrl = $el.find('ImageUrl').text()
+          const externalLink = $el.find('ExternalLink').text()
+
+          // eth specific
+          const standard = $el.find('Standard').text()
+          const slug = $el.find('Slug').text()
+
+          switch (chain) {
+            case 'eth':
+              addDeal({
+                ...common,
+                audiusDealType: 'NFTGated',
+                chain,
+                address,
+                name,
+                imageUrl,
+                externalLink,
+                standard,
+                slug,
+              })
+              break
+            case 'sol':
+              addDeal({
+                ...common,
+                audiusDealType: 'NFTGated',
+                chain,
+                address,
+                name,
+                imageUrl,
+                externalLink,
+              })
+              break
+          }
+        }
+      })
     })
-  })
+  } else {
+    // DDEX 3.8 structure: ReleaseDeal
+    $('ReleaseDeal').each((_, el) => {
+      const $el = $(el)
+      const ref = $el.find('DealReleaseReference').text()
+      $el.find('DealTerms').each((_, el) => {
+        const $el = $(el)
+
+        const cmt = $el.find('CommercialModelType')
+        const commercialModelType = cmt.attr('UserDefinedValue') || cmt.text()
+        const usageTypes = toTexts($el.find('Usage > UseType'))
+        const territoryCode = toTexts($el.find('TerritoryCode'))
+        const validityStartDate = $el.find('ValidityPeriod > StartDate').text()
+        const validityEndDate = $el.find('ValidityPeriod > EndDate').text()
+
+        // only consider Worldwide
+        const isWorldwide = territoryCode.includes('Worldwide')
+        if (!isWorldwide) {
+          return
+        }
+
+        // check date range
+        {
+          const startDate = new Date(validityStartDate)
+          const endDate = new Date(validityEndDate)
+          const now = new Date()
+          if (startDate && now < startDate) {
+            return
+          }
+          if (endDate && now > endDate) {
+            return
+          }
+        }
+
+        // add deal
+        function addDeal(deal: AudiusSupportedDeal) {
+          releaseDeals[ref] ||= []
+          releaseDeals[ref].push(deal)
+        }
+
+        const common: DealFields = {
+          forStream:
+            usageTypes.includes('OnDemandStream') ||
+            usageTypes.includes('Stream'),
+          forDownload: usageTypes.includes('PermanentDownload'),
+          validityStartDate,
+          validityEndDate,
+        }
+
+        if (commercialModelType == 'FreeOfChargeModel') {
+          addDeal({
+            ...common,
+            audiusDealType: 'Free',
+          })
+        } else if (commercialModelType == 'PayAsYouGoModel') {
+          const deal: DealPayGated = {
+            ...common,
+            audiusDealType: 'PayGated',
+          }
+          const priceUsd = parseFloat(
+            $el.find('WholesalePricePerUnit[CurrencyCode="USD"]').text()
+          )
+          if (priceUsd) {
+            deal.priceUsd = priceUsd
+          }
+          addDeal(deal)
+        } else if (
+          commercialModelType == 'FollowGated' ||
+          commercialModelType == 'TipGated'
+        ) {
+          addDeal({
+            ...common,
+            audiusDealType: commercialModelType,
+          })
+        } else if (commercialModelType == 'NFTGated') {
+          const chain = $el.find('Chain').text()
+          const address = $el.find('Address').text()
+          const name = $el.find('Name').text()
+          const imageUrl = $el.find('ImageUrl').text()
+          const externalLink = $el.find('ExternalLink').text()
+
+          // eth specific
+          const standard = $el.find('Standard').text()
+          const slug = $el.find('Slug').text()
+
+          switch (chain) {
+            case 'eth':
+              addDeal({
+                ...common,
+                audiusDealType: 'NFTGated',
+                chain,
+                address,
+                name,
+                imageUrl,
+                externalLink,
+                standard,
+                slug,
+              })
+              break
+            case 'sol':
+              addDeal({
+                ...common,
+                audiusDealType: 'NFTGated',
+                chain,
+                address,
+                name,
+                imageUrl,
+                externalLink,
+              })
+              break
+          }
+        }
+      })
+    })
+  }
 
   // after parsing deals... if there is only a forDownload deal and no forStream deal
   // mark the forDownload deal as forStream... which will make this a pay gated track.
@@ -421,29 +604,55 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
 
     const recording: DDEXSoundRecording = {
       ref: $el.find('ResourceReference').text(),
-      isrc: $el.find('ISRC').text(),
+      isrc: isDdex40 
+        ? $el.find('SoundRecordingEdition > ResourceId > ISRC').text()
+        : $el.find('ISRC').text(),
 
-      filePath: $el.find('FilePath:first').text(),
-      fileName: $el.find('FileName:first').text(),
-      title: $el.find('TitleText:first').text(),
-      subTitle: $el.find('SubTitle:first').text(),
+      filePath: (() => {
+        if (isDdex40) {
+          const fullUri = $el.find('SoundRecordingEdition > TechnicalDetails > DeliveryFile > File > URI').text()
+          const lastSlashIndex = fullUri.lastIndexOf('/')
+          return lastSlashIndex !== -1 ? fullUri.substring(0, lastSlashIndex + 1) : ''
+        } else {
+          return $el.find('FilePath:first').text()
+        }
+      })(),
+      fileName: (() => {
+        if (isDdex40) {
+          const fullUri = $el.find('SoundRecordingEdition > TechnicalDetails > DeliveryFile > File > URI').text()
+          const lastSlashIndex = fullUri.lastIndexOf('/')
+          return lastSlashIndex !== -1 ? fullUri.substring(lastSlashIndex + 1) : fullUri
+        } else {
+          return $el.find('FileName:first').text()
+        }
+      })(),
+      title: isDdex40
+        ? $el.find('DisplayTitle > TitleText').text()
+        : $el.find('TitleText:first').text(),
+      subTitle: isDdex40
+        ? $el.find('DisplayTitle > SubTitle').text()
+        : $el.find('SubTitle:first').text(),
       artists: parseContributor('DisplayArtist', $el),
       contributors: parseContributor('ResourceContributor', $el),
       indirectContributors: parseContributor(
         'IndirectResourceContributor',
         $el
       ),
-      labelName: $el.find('LabelName').text(),
+      labelName: isDdex40
+        ? '' // Label name is not directly in SoundRecording for DDEX 4.0
+        : $el.find('LabelName').text(),
       duration: parseDuration($el.find('Duration').text()),
-      previewStartSeconds: parseInt(
-        $el.find('PreviewDetails > StartPoint:first').text()
-      ),
+      previewStartSeconds: isDdex40
+        ? parseInt($el.find('ClipDetails > Timing > StartPoint:first').text()) / 1000
+        : parseInt($el.find('PreviewDetails > StartPoint:first').text()),
       genre: genre,
       subGenre: subGenre,
-      releaseDate: $el
-        .find('OriginalResourceReleaseDate, ResourceReleaseDate')
-        .first()
-        .text(),
+      releaseDate: isDdex40
+        ? $el.find('FirstPublicationDate').text()
+        : $el
+          .find('OriginalResourceReleaseDate, ResourceReleaseDate')
+          .first()
+          .text(),
 
       copyrightLine: cline($el),
       producerCopyrightLine: pline($el),
@@ -468,11 +677,27 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
   })
 
   function ddexResourceReducer(acc: Record<string, DDEXResource>, el: any) {
-    const [ref, filePath, fileName] = [
-      'ResourceReference',
-      'FilePath',
-      'FileName',
-    ].map((k) => $(el).find(k).text())
+    const $el = $(el)
+    const ref = $el.find('ResourceReference').text()
+    
+    let filePath: string
+    let fileName: string
+    
+    if (isDdex40) {
+      const fullUri = $el.find('TechnicalDetails > File > URI').text()
+      const lastSlashIndex = fullUri.lastIndexOf('/')
+      if (lastSlashIndex !== -1) {
+        filePath = fullUri.substring(0, lastSlashIndex + 1) // Include the trailing slash
+        fileName = fullUri.substring(lastSlashIndex + 1)
+      } else {
+        filePath = ''
+        fileName = fullUri
+      }
+    } else {
+      filePath = $el.find('FilePath').text()
+      fileName = $el.find('FileName').text()
+    }
+    
     acc[ref] = { ref, filePath, fileName }
     return acc
   }
@@ -487,7 +712,9 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
   // parse releases
   //
 
-  const work = $('Release')
+  const releaseSelector = isDdex40 ? 'ReleaseList > Release' : 'Release'
+  
+  const work = $(releaseSelector)
     .toArray()
     .map(async (el) => {
       const $el = $(el)
@@ -498,25 +725,33 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
         ? deals[0].validityStartDate
         : undefined
 
-      const releaseDate =
-        validityStartDate ||
-        $el.find('ReleaseDate').text() ||
-        $el.find('GlobalOriginalReleaseDate').text() ||
-        $el.find('OriginalReleaseDate').text()
+      const releaseDate = isDdex40
+        ? (validityStartDate ||
+          $el.find('OriginalReleaseDate').text())
+        : (validityStartDate ||
+          $el.find('ReleaseDate').text() ||
+          $el.find('GlobalOriginalReleaseDate').text() ||
+          $el.find('OriginalReleaseDate').text())
 
       const [genre, subGenre] = parseGenres($el)
 
       const release: DDEXRelease = {
         ref,
-        title: $el.find('ReferenceTitle TitleText').text(),
-        subTitle: $el.find('ReferenceTitle SubTitle').text(),
+        title: isDdex40
+          ? $el.find('DisplayTitle > TitleText').text()
+          : $el.find('ReferenceTitle TitleText').text(),
+        subTitle: isDdex40
+          ? $el.find('DisplayTitle > SubTitle').text()
+          : $el.find('ReferenceTitle SubTitle').text(),
         artists: parseContributor('DisplayArtist', $el),
         contributors: parseContributor('ResourceContributor', $el),
         indirectContributors: parseContributor(
           'IndirectResourceContributor',
           $el
         ),
-        labelName: $el.find('LabelName').text(),
+        labelName: isDdex40
+          ? (partList[$el.find('ReleaseLabelReference').text()] || '')
+          : $el.find('LabelName').text(),
         genre,
         subGenre,
         releaseIds: parseReleaseIds($el),
@@ -549,8 +784,12 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI) {
       }
 
       // resolve resources
+      const resourceSelector = isDdex40 
+        ? 'ResourceGroup ReleaseResourceReference, ResourceGroupContentItem > ReleaseResourceReference, LinkedReleaseResourceReference'
+        : 'ReleaseResourceReferenceList > ReleaseResourceReference'
+      
       $el
-        .find('ReleaseResourceReferenceList > ReleaseResourceReference')
+        .find(resourceSelector)
         .each((_, el) => {
           const ref = $(el).text()
 

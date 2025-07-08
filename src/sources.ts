@@ -29,6 +29,8 @@ export type SourceConfig = BucketConfig & {
   placementHosts?: string
   payoutUserId?: string
   labelUserIds: Record<string, string>
+  acknowledgementServerUsername?: string
+  acknowledgementServerPassword?: string
 }
 
 let sourcesFile: SourcesFile

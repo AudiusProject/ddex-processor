@@ -18,7 +18,9 @@ type TokenCacheEntry = {
   expiresAt: number
 }
 
+// Promise-based cache to prevent race conditions
 const tokenCache: Map<string, TokenCacheEntry> = new Map()
+const tokenPromises: Map<string, Promise<string>> = new Map()
 
 function getCachedToken(source: string): string | null {
   const entry = tokenCache.get(source)
@@ -36,6 +38,61 @@ function getCachedToken(source: string): string | null {
 function setCachedToken(source: string, token: string): void {
   const expiresAt = Date.now() + (60 * 60 * 1000) // 1 hour from now
   tokenCache.set(source, { token, expiresAt })
+}
+
+async function getOrFetchToken(source: string, acknowledgementServerUsername: string, acknowledgementServerPassword: string): Promise<string> {
+  // Check cache first
+  const cachedToken = getCachedToken(source)
+  if (cachedToken) {
+    console.log('Using cached bearer token')
+    return cachedToken
+  }
+
+  // Check if there's already a token request in progress
+  const existingPromise = tokenPromises.get(source)
+  if (existingPromise) {
+    console.log('Waiting for existing token request to complete...')
+    return existingPromise
+  }
+
+  // Start a new token request
+  const tokenPromise = fetchNewToken(source, acknowledgementServerUsername, acknowledgementServerPassword)
+  tokenPromises.set(source, tokenPromise)
+
+  try {
+    const token = await tokenPromise
+    return token
+  } finally {
+    // Clean up the promise from the map
+    tokenPromises.delete(source)
+  }
+}
+
+async function fetchNewToken(source: string, acknowledgementServerUsername: string, acknowledgementServerPassword: string): Promise<string> {
+  const DPID = 'PADPIDA202401120D9'
+  const tokenUrl = `https://delivery-gw.smecde.com/gateway/token/${DPID}`
+  const basicAuth = Buffer.from(`${acknowledgementServerUsername}:${acknowledgementServerPassword}`).toString('base64')
+
+  console.log('Requesting bearer token from:', tokenUrl)
+  const tokenResponse = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${basicAuth}`,
+      'Content-Type': 'application/json'
+    }
+  })
+
+  if (!tokenResponse.ok) {
+    throw new Error(`Token request failed: ${tokenResponse.status} ${tokenResponse.statusText}`)
+  }
+
+  const bearerToken = await tokenResponse.text()
+  console.log('Bearer token obtained')
+  
+  // Cache the token for 1 hour
+  setCachedToken(source, bearerToken)
+  
+  return bearerToken
 }
 
 function getSourcePartyName(source: string): string {
@@ -185,49 +242,25 @@ async function sendAcknowledgement(source: string, xml: string) {
   
   try {
     // Step 1: Generate Gateway Bearer Token (only if not cached)
-    let bearerToken = getCachedToken(source)
-    if (!bearerToken) {
-      const tokenUrl = `https://delivery-gw.smecde.com/gateway/token/${DPID}`
-      const basicAuth = Buffer.from(`${acknowledgementServerUsername}:${acknowledgementServerPassword}`).toString('base64')
-
-      console.log('Requesting bearer token from:', tokenUrl)
-      const tokenResponse = await fetch(tokenUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${basicAuth}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!tokenResponse.ok) {
-        throw new Error(`Token request failed: ${tokenResponse.status} ${tokenResponse.statusText}`)
-      }
-
-      bearerToken = await tokenResponse.text()
-      console.log('Bearer token obtained')
-      
-      // Cache the token for 1 hour
-      setCachedToken(source, bearerToken)
-    } else {
-      console.log('Using cached bearer token')
-    }
+    const bearerToken = await getOrFetchToken(source, acknowledgementServerUsername, acknowledgementServerPassword)
+    console.log('Got bearerToken', bearerToken)
 
     // Step 2: Post the XML using the bearer token
     const statusUrl = `https://delivery-gw.smecde.com/gateway/ddex/ern/post/status/${DPID}`
     console.log('Posting acknowledgement XML to:', statusUrl)
     
-    // const statusResponse = await fetch(statusUrl, {
-    //   method: 'POST',
-    //   headers: {
-    //     'Authorization': `Bearer ${bearerToken}`,
-    //     'Content-Type': 'application/xml'
-    //   },
-    //   body: xml
-    // })
+    const statusResponse = await fetch(statusUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${bearerToken}`,
+        'Content-Type': 'application/xml'
+      },
+      body: xml
+    })
     
-    // if (!statusResponse.ok) {
-    //   throw new Error(`Status post failed: ${statusResponse.status} ${statusResponse.statusText}`)
-    // }
+    if (!statusResponse.ok) {
+      throw new Error(`Status post failed: ${statusResponse.status} ${statusResponse.statusText}`)
+    }
     
     console.log('Acknowledgement XML posted successfully')
   } catch (error) {

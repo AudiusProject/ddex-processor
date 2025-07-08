@@ -104,15 +104,19 @@ function getSourcePartyName(source: string): string {
   }
 }
 
-function generateAcknowledgementXml(
+function generateAcknowledgementXml({
+  source,
+  messageId,
+  releases,
+  isSuccess,
+  error,
+}: {
   source: string,
-  xmlUrl: string,
   messageId: string,
-  messageTimestamp: string,
   releases: DDEXRelease[],
   isSuccess: boolean,
   error?: string
-): string {
+}): string {
   const $ = cheerio.load('', { xmlMode: true })
   
   // Create root element
@@ -269,13 +273,19 @@ async function sendAcknowledgement(source: string, xml: string) {
   }
 }
 
-export async function acknowledgeReleaseSuccess(
-  source: string,
-  xmlUrl: string,
-  messageId: string,
-  messageTimestamp: string,
+export async function acknowledgeReleaseSuccess({
+  source,
+  xmlUrl,
+  messageId,
+  messageTimestamp,
+  releases,
+}: {
+  source: string
+  xmlUrl: string
+  messageId: string
+  messageTimestamp: string
   releases: DDEXRelease[]
-) {
+}) {
   const result: AcknowledgementResult = {
     source,
     xmlUrl,
@@ -301,12 +311,12 @@ export async function acknowledgeReleaseSuccess(
   
   // Generate and log acknowledgement XML
   const acknowledgementXml = generateAcknowledgementXml(
-    source,
-    xmlUrl,
-    messageId,
-    messageTimestamp,
-    releases,
-    true
+    {
+      source,
+      messageId,
+      releases,
+      isSuccess: true
+    }
   )
   console.log(acknowledgementXml)
   
@@ -321,13 +331,19 @@ export async function acknowledgeReleaseSuccess(
   return result
 }
 
-export async function acknowledgeReleaseFailure(
-  source: string,
-  xmlUrl: string,
-  messageId: string,
-  messageTimestamp: string,
+export async function acknowledgeReleaseFailure({
+  source,
+  xmlUrl,
+  messageId,
+  messageTimestamp,
+  error,
+}: {
+  source: string
+  xmlUrl: string
+  messageId: string
+  messageTimestamp: string
   error: string | Error
-) {
+}) {
   const errorMessage = error instanceof Error ? error.message : error
   
   const result: AcknowledgementResult = {
@@ -347,13 +363,13 @@ export async function acknowledgeReleaseFailure(
   
   // Generate and log acknowledgement XML for failure
   const acknowledgementXml = generateAcknowledgementXml(
-    source,
-    xmlUrl,
-    messageId,
-    messageTimestamp,
-    [], // Empty releases array for failures
-    false,
-    errorMessage
+    {
+      source,
+      messageId,
+      releases: [], // Empty releases array for failures
+      isSuccess: false,
+      error: errorMessage
+    }
   )
   console.log(acknowledgementXml)
   

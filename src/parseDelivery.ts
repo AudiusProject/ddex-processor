@@ -233,7 +233,13 @@ export async function parseDdexXml(
         // Only send acknowledgement for SME
         source === 'sme'
       ) {
-        await acknowledgeReleaseSuccess(source, xmlUrl, messageId, messageTimestamp, releases)
+        await acknowledgeReleaseSuccess({
+          source,
+          xmlUrl,
+          messageId,
+          messageTimestamp,
+          releases,
+        })
       }
       
       return releases
@@ -260,7 +266,13 @@ export async function parseDdexXml(
       // Only send acknowledgement for SME
       source === 'sme'
     ) {
-      await acknowledgeReleaseFailure(source, xmlUrl, messageId, messageTimestamp, error as Error)
+      await acknowledgeReleaseFailure({
+        source,
+        xmlUrl,
+        messageId,
+        messageTimestamp,
+        error: error as Error
+      })
     }
     
     // Re-throw the error so it can be handled by the caller

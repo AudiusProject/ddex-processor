@@ -5,6 +5,7 @@ import type { Element } from 'domhandler'
 import { mkdtemp, readFile, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { acknowledgeReleaseFailure, acknowledgeReleaseSuccess } from './acknowledgement'
 import { releaseRepo, userRepo, xmlRepo } from './db'
 import { sources } from './sources'
 import { lowerAscii, omitEmpty } from './util'
@@ -186,47 +187,96 @@ export async function parseDdexXml(
   xmlUrl: string,
   xmlText: string
 ) {
-  const $ = cheerio.load(xmlText, { xmlMode: true })
+  try {
+    const $ = cheerio.load(xmlText, { xmlMode: true })
 
-  const messageTimestamp = $('MessageCreatedDateTime').first().text()
-  const rawTagName = $.root().children().first().prop('name')
-  const tagName = [
-    'NewReleaseMessage',
-    'PurgeReleaseMessage',
-    'ManifestMessage',
-  ].find((n) => rawTagName.includes(n))
-  const isUpdate = $('UpdateIndicator').text() == 'UpdateMessage'
+    const messageTimestamp = $('MessageCreatedDateTime').first().text()
+    const rawTagName = $.root().children().first().prop('name')
+    const tagName = [
+      'NewReleaseMessage',
+      'PurgeReleaseMessage',
+      'ManifestMessage',
+    ].find((n) => rawTagName.includes(n))
+    const isUpdate = $('UpdateIndicator').text() == 'UpdateMessage'
+    const messageId = $('MessageId').text()
 
-  // Detect DDEX version
-  const isDdex40 = xmlText.includes('http://ddex.net/xml/ern/4')
+    // Detect DDEX version
+    const isDdex40 = xmlText.includes('http://ddex.net/xml/ern/4')
 
-  // todo: would be nice to skip this on reParse
-  await xmlRepo.upsert({
-    source,
-    xmlUrl,
-    messageTimestamp,
-  })
-
-  if (tagName == 'ManifestMessage') {
-    // don't care about batch.
-  } else if (tagName == 'PurgeReleaseMessage') {
-    // mark release rows as DeletePending
-    const { releaseIds } = parsePurgeXml($)
-    await releaseRepo.markForDelete(
+    // todo: would be nice to skip this on reParse
+    await xmlRepo.upsert({
       source,
       xmlUrl,
       messageTimestamp,
-      releaseIds
-    )
-  } else if (tagName == 'NewReleaseMessage') {
-    // create or replace this release in db
-    const releases = await parseReleaseXml(source, $, isDdex40)
-    for (const release of releases) {
-      await releaseRepo.upsert(source, xmlUrl, messageTimestamp, release)
+    })
+
+    if (tagName == 'ManifestMessage') {
+      // don't care about batch.
+    } else if (tagName == 'PurgeReleaseMessage') {
+      // mark release rows as DeletePending
+      const { releaseIds } = parsePurgeXml($)
+      await releaseRepo.markForDelete(
+        source,
+        xmlUrl,
+        messageTimestamp,
+        releaseIds
+      )
+    } else if (tagName == 'NewReleaseMessage') {
+      // create or replace this release in db
+      const releases = await parseReleaseXml(source, $, isDdex40)
+      for (const release of releases) {
+        await releaseRepo.upsert(source, xmlUrl, messageTimestamp, release)
+      }
+      
+      if (
+        process.env.SEND_ACKNOWLEDGEMENTS === 'true' &&
+        // Only send acknowledgement for SME
+        source === 'sme'
+      ) {
+        await acknowledgeReleaseSuccess({
+          source,
+          xmlUrl,
+          messageId,
+          messageTimestamp,
+          releases,
+        })
+      }
+      
+      return releases
+    } else {
+      console.log('unknown tagname', tagName)
     }
-    return releases
-  } else {
-    console.log('unknown tagname', tagName)
+  } catch (error) {
+    console.error('Failed to parse DDEX XML:', xmlUrl, error)
+    
+    // Extract messageTimestamp if possible, otherwise use current time
+    let messageTimestamp: string
+    let messageId: string
+    try {
+      const $ = cheerio.load(xmlText, { xmlMode: true })
+      messageTimestamp = $('MessageCreatedDateTime').first().text() || new Date().toISOString()
+      messageId = $('MessageId').text()
+    } catch {
+      messageTimestamp = new Date().toISOString()
+      messageId = ''
+    }
+    
+    if (
+      process.env.SEND_ACKNOWLEDGEMENTS === 'true' &&
+      // Only send acknowledgement for SME
+      source === 'sme'
+    ) {
+      await acknowledgeReleaseFailure({
+        source,
+        xmlUrl,
+        messageId,
+        messageTimestamp,
+        error: error as Error
+      })
+    }
+    
+    // Re-throw the error so it can be handled by the caller
+    throw error
   }
 }
 

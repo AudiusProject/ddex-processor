@@ -967,7 +967,7 @@ function resolveAudiusGenre(
 
   // maybe try some edit distance magic?
   // for now just log
-  console.warn(`failed to resolve genre: subgenre=${subgenre} genre=${genre}`)
+  console.warn(`no matching genre: subgenre=${subgenre} genre=${genre}`)
 }
 
 export function parseDuration(dur: string) {

@@ -4,6 +4,7 @@ import {
   S3Client,
   S3ClientConfig,
 } from '@aws-sdk/client-s3'
+import * as cheerio from 'cheerio'
 import { mkdir, readFile, stat, writeFile } from 'fs/promises'
 import { basename, dirname, join, resolve } from 'path'
 import sharp from 'sharp'
@@ -80,14 +81,32 @@ export async function pollS3Source(
 
     // Handle case where there are common prefixes (folder structure)
     if (prefixes && prefixes.length > 0) {
-      const batchSize = 20
+      const batchSize = 100
       for (let i = 0; i < prefixes.length; i += batchSize) {
         const batch = prefixes.slice(i, i + batchSize)
+        
+        // Collect all files from all prefixes in this batch
+        const allFiles: any[] = []
+        
+        // Fetch files from all prefixes in parallel for efficiency
         await Promise.all(
           batch.map(async (prefix) => {
-            await scanS3Prefix(sourceName, client, bucket, prefix)
+            const prefixResult = await client.send(
+              new ListObjectsCommand({
+                Bucket: bucket,
+                Prefix: prefix,
+              })
+            )
+            if (prefixResult.Contents) {
+              allFiles.push(...prefixResult.Contents)
+            }
           })
         )
+
+        // Process all files in chronological order
+        if (allFiles.length > 0) {
+          await processS3Contents(sourceName, client, bucket, allFiles)
+        }
       }
       
       // save marker for prefixes
@@ -126,26 +145,45 @@ async function processS3Contents(
   bucket: string,
   contents: any[]
 ) {
-  for (const c of contents) {
-    if (!c.Key) continue
-
-    const lowerKey = c.Key.toLowerCase()
-    if (!lowerKey.endsWith('.xml') || lowerKey.includes('batchcomplete')) {
-      continue
-    }
-
-    const xmlUrl = `s3://` + join(bucket, c.Key)
-    const { Body } = await client.send(
-      new GetObjectCommand({
-        Bucket: bucket,
-        Key: c.Key,
+  // First, fetch and parse all XML files to get their timestamps
+  const filesWithTimestamps = await Promise.all(
+    contents
+      .filter(c => c.Key?.toLowerCase().endsWith('.xml') && !c.Key.includes('batchcomplete'))
+      .map(async (c) => {
+        try {
+          const { Body } = await client.send(
+            new GetObjectCommand({
+              Bucket: bucket,
+              Key: c.Key,
+            })
+          )
+          const xml = await Body?.transformToString()
+          if (xml) {
+            const $ = cheerio.load(xml, { xmlMode: true })
+            const messageTimestamp = $('MessageCreatedDateTime').first().text()
+            return { key: c.Key, xml, messageTimestamp }
+          }
+        } catch (error) {
+          console.error(`Failed to fetch/parse ${c.Key}:`, error)
+        }
+        return null
       })
-    )
-    const xml = await Body?.transformToString()
-    if (xml) {
-      console.log('parsing', xmlUrl)
-      const releases = (await parseDdexXml(source, xmlUrl, xml)) || []
-    }
+  )
+
+  // Sort by messageTimestamp, handling cases where timestamp might be missing
+  const sortedFiles = filesWithTimestamps
+    .filter(Boolean)
+    .sort((a, b) => {
+      const timestampA = a!.messageTimestamp || ''
+      const timestampB = b!.messageTimestamp || ''
+      return timestampA.localeCompare(timestampB)
+    })
+
+  // Process in chronological order
+  for (const file of sortedFiles) {
+    const xmlUrl = `s3://` + join(bucket, file!.key)
+    console.log('parsing', xmlUrl, 'timestamp:', file!.messageTimestamp)
+    const releases = (await parseDdexXml(source, xmlUrl, file!.xml)) || []
   }
 }
 

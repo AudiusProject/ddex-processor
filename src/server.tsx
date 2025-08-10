@@ -341,6 +341,7 @@ app.get('/releases', async (c) => {
             <th>Genre</th>
             <th>Release</th>
             <th>Clear</th>
+            <th>Status</th>
             <th></th>
             <th></th>
             <th>debug</th>
@@ -405,6 +406,7 @@ ${row.soundRecordings.length} tracks`}
                   </div>
                 )}
               </td>
+              <td>{row.status}</td>
               <td>
                 {row.publishErrorCount > 0 && (
                   <a href={`/releases/${encodeURIComponent(row.key)}/error`}>

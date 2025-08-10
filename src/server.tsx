@@ -23,7 +23,12 @@ import {
 import { DDEXContributor, DDEXRelease, parseDdexXml } from './parseDelivery'
 import { prepareAlbumMetadata, prepareTrackMetadatas } from './publishRelease'
 import { generateSalesReport } from './reporting/sales_report'
-import { dialS3, parseS3Url, readAssetWithCaching } from './s3poller'
+import {
+  dialS3,
+  getPresignedAssetUrl,
+  parseS3Url,
+  readAssetWithCaching,
+} from './s3poller'
 import { sources } from './sources'
 import { parseBool } from './util'
 
@@ -756,8 +761,22 @@ app.get('/release/:source/:key/:ref/:size?', async (c) => {
   const size = c.req.param('size')
 
   const asset = await assetRepo.get(source, key, ref)
+  console.log('asset', asset)
   if (!asset) return c.json({ error: 'not found' }, 404)
 
+  // If no resizing requested (a stream instead of an image),
+  // redirect to presigned S3 URL to avoid proxying bytes
+  if (!size) {
+    const url = await getPresignedAssetUrl({
+      xmlUrl: asset.xmlUrl,
+      filePath: asset.filePath,
+      fileName: asset.fileName,
+      expiresInSeconds: 600
+    })
+    return c.redirect(url, 302)
+  }
+
+  // Resize requested: keep existing behavior (read, resize via cache helper) for now
   const ok = await readAssetWithCaching(
     asset.xmlUrl,
     asset.filePath,

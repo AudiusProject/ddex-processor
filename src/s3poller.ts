@@ -4,6 +4,7 @@ import {
   S3Client,
   S3ClientConfig,
 } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import * as cheerio from 'cheerio'
 import { mkdir, readFile, stat, writeFile } from 'fs/promises'
 import { basename, dirname, join, resolve } from 'path'
@@ -226,11 +227,14 @@ export async function readAssetWithCaching(
     const destinationPath = join(
       ...[cacheBaseDir, Bucket, imageSize, Key].filter(Boolean)
     )
+    console.log('destinationPath', destinationPath)
 
     // fetch if needed
     const exists = await fileExists(destinationPath)
     if (!exists) {
+      console.log('fetching', xmlUrl)
       const source = sources.findByXmlUrl(xmlUrl)
+      console.log('source', source)
       const s3 = dialS3(source)
       await mkdir(dirname(destinationPath), { recursive: true })
       const { Body } = await s3.send(new GetObjectCommand({ Bucket, Key }))
@@ -271,6 +275,36 @@ export async function readAssetWithCaching(
   // read from local disk
   const fileUrl = resolve(xmlUrl, '..', filePath, fileName)
   return readFileToBuffer(fileUrl)
+}
+
+// Return a short-lived presigned HTTPS URL for an S3 object referenced by xmlUrl + filePath + fileName
+export async function getPresignedAssetUrl({
+  xmlUrl,
+  filePath,
+  fileName,
+  expiresInSeconds
+}: {
+  xmlUrl: string,
+  filePath: string,
+  fileName: string,
+  expiresInSeconds: number
+}): Promise<string> {
+  if (!xmlUrl.startsWith('s3:')) {
+    // local file path; resolve to file URL
+    const fileUrl = resolve(xmlUrl, '..', filePath, fileName)
+    return fileUrl
+  }
+
+  const s3url = new URL(`${filePath}${fileName}`, xmlUrl)
+  const Bucket = s3url.host
+  const Key = s3url.pathname.substring(1)
+  const source = sources.findByXmlUrl(xmlUrl)
+  const s3 = dialS3(source)
+  const command = new GetObjectCommand({ Bucket, Key })
+  const signed = await getSignedUrl(s3 as any, command as any, {
+    expiresIn: expiresInSeconds,
+  })
+  return signed
 }
 
 // sdk helpers

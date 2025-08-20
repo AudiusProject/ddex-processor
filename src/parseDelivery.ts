@@ -242,6 +242,7 @@ export async function parseDdexXml(
             xmlUrl,
             messageId,
             messageTimestamp,
+            releases,
             error: 'InvalidDealDate',
           })
         } else {

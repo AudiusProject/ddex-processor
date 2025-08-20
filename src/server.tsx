@@ -406,7 +406,28 @@ ${row.soundRecordings.length} tracks`}
                   </div>
                 )}
               </td>
-              <td>{row.status}</td>
+              <td>
+                {row.status}
+                {row.problems?.length > 0 && (
+                  <div style={{ marginTop: '4px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                    {row.problems.map((p) => (
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          border: '1px solid var(--pico-muted-border-color, #ccc)',
+                          borderRadius: '4px',
+                          padding: '1px 4px',
+                          fontSize: '11px',
+                          lineHeight: 1.4,
+                        }}
+                        title={p}
+                      >
+                        {p}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </td>
               <td>
                 {row.publishErrorCount > 0 && (
                   <a href={`/releases/${encodeURIComponent(row.key)}/error`}>

@@ -227,14 +227,11 @@ export async function readAssetWithCaching(
     const destinationPath = join(
       ...[cacheBaseDir, Bucket, imageSize, Key].filter(Boolean)
     )
-    console.log('destinationPath', destinationPath)
 
     // fetch if needed
     const exists = await fileExists(destinationPath)
     if (!exists) {
-      console.log('fetching', xmlUrl)
       const source = sources.findByXmlUrl(xmlUrl)
-      console.log('source', source)
       const s3 = dialS3(source)
       await mkdir(dirname(destinationPath), { recursive: true })
       const { Body } = await s3.send(new GetObjectCommand({ Bucket, Key }))

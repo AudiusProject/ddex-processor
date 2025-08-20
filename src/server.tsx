@@ -784,7 +784,6 @@ app.get('/release/:source/:key/:ref/:size?', async (c) => {
   const size = c.req.param('size')
 
   const asset = await assetRepo.get(source, key, ref)
-  console.log('asset', asset)
   if (!asset) return c.json({ error: 'not found' }, 404)
 
   // If no resizing requested (a stream instead of an image),

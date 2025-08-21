@@ -234,7 +234,7 @@ export function prepareTrackMetadatas(
         title = release.artists[0].name + ' - ' + title
       }
       if (releaseRow.useDefaultDeal) {
-        release.deals.push(DEFAULT_TRACK_DEAL)
+        release.deals = [DEFAULT_TRACK_DEAL]
       }
 
       const meta: UploadTrackRequest['metadata'] = {
@@ -288,7 +288,6 @@ export function prepareTrackMetadatas(
             source.payoutUserId ||
             release.audiusUser!
           const priceUsd = deal.priceUsd || DEFAULT_TRACK_PRICE
-          console.log({ payTo, priceUsd })
 
           const cond = {
             usdcPurchase: {
@@ -323,6 +322,7 @@ export function prepareTrackMetadatas(
       }
 
       // todo: nft gated types
+      // todo: artist coin gated types
 
       return meta
     })
@@ -411,7 +411,7 @@ export function prepareAlbumMetadata(
     title = release.artists[0].name + ' - ' + title
   }
   if (releaseRow.useDefaultDeal) {
-    release.deals.push(DEFAULT_ALBUM_DEAL)
+    release.deals = [DEFAULT_ALBUM_DEAL]
   }
 
   if (!release.audiusGenre) {

@@ -7,6 +7,8 @@ import { releaseRepo, userRepo } from './src/db'
 import { pgMigrate } from './src/db/migrations'
 import { parseDelivery } from './src/parseDelivery'
 import {
+  DEFAULT_ALBUM_DEAL,
+  DEFAULT_TRACK_DEAL,
   prepareTrackMetadatas,
   publishValidPendingReleases,
 } from './src/publishRelease'
@@ -73,6 +75,13 @@ program
           s.title = `${artistName} - ${s.title}`
         }
       }
+    }
+    if (opts.useDefaultDeal) {
+      release.deals.push(
+        release.soundRecordings.length > 1
+          ? DEFAULT_ALBUM_DEAL
+          : DEFAULT_TRACK_DEAL
+      )
     }
 
     console.log(JSON.stringify(release, undefined, 2))

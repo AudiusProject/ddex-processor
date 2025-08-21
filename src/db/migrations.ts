@@ -38,7 +38,8 @@ const steps = [
     "releaseDate" text,
     "numCleared" int,
     "numNotCleared" int,
-    "prependArtist" boolean
+    "prependArtist" boolean,
+    "useDefaultDeal" boolean
   );
   `,
 
@@ -112,7 +113,8 @@ const steps = [
   ADD COLUMN IF NOT EXISTS "deals" jsonb,
   ADD COLUMN IF NOT EXISTS "copyrightLine" jsonb,
   ADD COLUMN IF NOT EXISTS "producerCopyrightLine" jsonb,
-  ADD COLUMN IF NOT EXISTS "parentalWarningType" text;
+  ADD COLUMN IF NOT EXISTS "parentalWarningType" text,
+  ADD COLUMN IF NOT EXISTS "useDefaultDeal" boolean;
   `,
 
   sql`

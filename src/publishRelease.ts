@@ -7,7 +7,7 @@ import {
   releaseRepo,
 } from './db'
 import { publogRepo } from './db/publogRepo'
-import { DDEXContributor, DDEXRelease, DDEXResource } from './parseDelivery'
+import { DDEXContributor, DDEXRelease, DDEXResource, DealPayGated } from './parseDelivery'
 import { readAssetWithCaching } from './s3poller'
 import { getSdk } from './sdk'
 import { SourceConfig, sources } from './sources'
@@ -15,6 +15,20 @@ import { decodeId } from './util'
 
 const DEFAULT_TRACK_PRICE = 1.0
 const DEFAULT_ALBUM_PRICE = 5.0
+export const DEFAULT_TRACK_DEAL: DealPayGated = {
+  audiusDealType: 'PayGated',
+  forStream: true,
+  forDownload: true,
+  priceUsd: DEFAULT_TRACK_PRICE,
+  validityStartDate: new Date().toISOString(),
+}
+export const DEFAULT_ALBUM_DEAL: DealPayGated = {
+  audiusDealType: 'PayGated',
+  forStream: true,
+  forDownload: true,
+  priceUsd: DEFAULT_ALBUM_PRICE,
+  validityStartDate: new Date().toISOString(),
+}
 
 export async function publishValidPendingReleases() {
   const rows = await releaseRepo.all({ pendingPublish: true })
@@ -219,6 +233,9 @@ export function prepareTrackMetadatas(
       if (releaseRow.prependArtist) {
         title = release.artists[0].name + ' - ' + title
       }
+      if (releaseRow.useDefaultDeal) {
+        release.deals = [DEFAULT_TRACK_DEAL]
+      }
 
       const meta: UploadTrackRequest['metadata'] = {
         genre: audiusGenre,
@@ -271,7 +288,6 @@ export function prepareTrackMetadatas(
             source.payoutUserId ||
             release.audiusUser!
           const priceUsd = deal.priceUsd || DEFAULT_TRACK_PRICE
-          console.log({ payTo, priceUsd })
 
           const cond = {
             usdcPurchase: {
@@ -306,6 +322,7 @@ export function prepareTrackMetadatas(
       }
 
       // todo: nft gated types
+      // todo: artist coin gated types
 
       return meta
     })
@@ -392,6 +409,9 @@ export function prepareAlbumMetadata(
   let title = [release.title, release.subTitle].filter(Boolean).join(' ')
   if (releaseRow.prependArtist) {
     title = release.artists[0].name + ' - ' + title
+  }
+  if (releaseRow.useDefaultDeal) {
+    release.deals = [DEFAULT_ALBUM_DEAL]
   }
 
   if (!release.audiusGenre) {

@@ -42,6 +42,7 @@ export type ReleaseRow = DDEXRelease & {
   numCleared: number
   numNotCleared: number
   prependArtist: string
+  useDefaultDeal: boolean
   entityType?: 'track' | 'album'
   entityId?: string
   blockHash?: string

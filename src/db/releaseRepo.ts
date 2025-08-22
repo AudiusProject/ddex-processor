@@ -172,6 +172,14 @@ export const releaseRepo = {
     `
   },
 
+  async markUseDefaultDeal(key: string, useDefaultDeal: boolean) {
+    await sql`
+      update releases set
+      "useDefaultDeal"=${useDefaultDeal}
+      where key = ${key}
+    `
+  },
+
   async markForDelete(
     source: string,
     xmlUrl: string,

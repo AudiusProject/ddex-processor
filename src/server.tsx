@@ -594,7 +594,7 @@ app.get('/releases/:key', async (c) => {
             )}
 
             {isNoDeal && (
-              <div>
+              <div style={{ margin: '8px 0' }}>
                 <mark>No Compatible Deal</mark>
               </div>
             )}
@@ -605,6 +605,16 @@ app.get('/releases/:key', async (c) => {
             >
               Publish
             </button>
+            {(isFutureRelease || isNoDeal) && (
+              <div style={{ margin: '8px 0' }}>
+                <a
+                  href="#"
+                  onclick="PublishModal.showModal(); return false;"
+                >
+                  Override
+                </a>
+              </div>
+            )}
           </div>
         </div>
 
@@ -635,6 +645,10 @@ app.get('/releases/:key', async (c) => {
                   <label title="Checking label account will prepend artist to track title.">
                     <input type="checkbox" name="prependArtist" />
                     Label Account
+                  </label>
+                  <label title="Checking default deal will add default deal information to the release. Use with caution.">
+                    <input type="checkbox" name="useDefaultDeal" />
+                    Default Deal
                   </label>
                   <small>
                     Checking Label Account will prepend artist name to release
@@ -893,6 +907,10 @@ app.post('/publish/:releaseId', async (c) => {
 
   if (body.prependArtist == 'on') {
     await releaseRepo.markPrependArtist(releaseId, true)
+  }
+
+  if (body.useDefaultDeal == 'on') {
+    await releaseRepo.markUseDefaultDeal(releaseId, true)
   }
 
   if (body.userId) {

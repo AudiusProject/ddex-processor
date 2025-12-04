@@ -13,3 +13,44 @@ Tracks are either
 
 * See [README_DEV](./README_DEV.md) for dev setup.
 * See [README_PROD](./README_PROD.md) for prod setup.
+
+## Docker
+
+This application can be run as a Docker container. The container runs both the server (`ddex`) and worker processes using PM2.
+
+### Building and Pushing Docker Image
+
+```bash
+# Build and optionally push the image
+./build-and-push.sh [version]
+
+# Examples:
+./build-and-push.sh           # Builds with 'latest' tag
+./build-and-push.sh v1.0.0    # Builds with version tag
+```
+
+The script will:
+- Build the Docker image with the tag `audius/ddex:latest` (and version tag if provided)
+- Optionally push to Docker Hub after building
+
+### Running the Docker Image
+
+Before running, ensure you have:
+1. A `.env` file with required environment variables (see [README_PROD.md](./README_PROD.md))
+2. A `data/sources.json` file configured (see [README_PROD.md](./README_PROD.md))
+
+Then run the container:
+
+```bash
+docker run -p 8989:8989 \
+  --env-file .env \
+  -v $(pwd)/data:/app/data \
+  audius/ddex:latest
+```
+
+The container will:
+- Run the server on port 8989
+- Run the worker process to poll S3 buckets
+- Both processes are managed by PM2
+
+**Note:** The `data` directory should be mounted as a volume to persist `sources.json` and other data files.

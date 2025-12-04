@@ -10,9 +10,7 @@ Tracks are either
 1. Published automatically to an artist profile that authorizes the source keypair to distribute on their behalf. This is done using the [Audius SDK oauth method](https://docs.audius.org/developers/sdk/oauth).
 2. Published manually using the UI tools provided in this package
 
-
 * See [README_DEV](./README_DEV.md) for dev setup.
-* See [README_PROD](./README_PROD.md) for prod setup.
 
 ## Docker
 
@@ -35,9 +33,21 @@ The script will:
 
 ### Running the Docker Image
 
-Before running, ensure you have:
-1. A `.env` file with required environment variables (see [README_PROD.md](./README_PROD.md))
-2. A `data/sources.json` file configured (see [README_PROD.md](./README_PROD.md))
+1. Create a `.env` file like:
+
+```bash
+COOKIE_SECRET='openssl rand -hex 16'
+NODE_ENV='production'
+DDEX_URL='https://ddex.example.com'
+ADMIN_HANDLES='user1,user2'
+SKIP_SDK_PUBLISH='true'
+```
+
+2. Create a `data/sources.json` file configured
+
+```bash
+cp sources.example.json data/sources.json
+```
 
 Then run the container:
 

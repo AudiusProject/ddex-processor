@@ -110,12 +110,14 @@ function generateAcknowledgementXml({
   releases,
   isSuccess,
   error,
+  recipientPartyId,
 }: {
   source: string,
   messageId: string,
   releases: DDEXRelease[],
   isSuccess: boolean,
-  error?: string
+  error?: string,
+  recipientPartyId?: string
 }): string {
   const $ = cheerio.load('', { xmlMode: true })
   
@@ -139,7 +141,8 @@ function generateAcknowledgementXml({
   
   // MessageRecipient (Source)
   const messageRecipient = $('<MessageRecipient></MessageRecipient>')
-  messageRecipient.append($(`<PartyId>${source.toUpperCase()}</PartyId>`))
+  const resolvedRecipient = recipientPartyId || (source === 'sme' ? 'PADPIDA2007040502I' : source.toUpperCase())
+  messageRecipient.append($(`<PartyId>${resolvedRecipient}</PartyId>`))
   const recipientPartyName = $('<PartyName></PartyName>')
   recipientPartyName.append($(`<FullName>${getSourcePartyName(source)}</FullName>`))
   messageRecipient.append(recipientPartyName)
@@ -175,30 +178,26 @@ function generateAcknowledgementXml({
       // ReleaseStatus - different values for success vs error
       if (isSuccess) {
         releaseStatus.append($('<ReleaseStatus>SuccessfullyIngestedByReleaseDistributor</ReleaseStatus>'))
+        const acknowledgement = $('<Acknowledgement></Acknowledgement>')
+        acknowledgement.append($('<MessageType>NewReleaseMessage</MessageType>'))
+        acknowledgement.append($(`<MessageId>${messageId}</MessageId>`))
+        const messageStatus = $('<MessageStatus></MessageStatus>')
+        messageStatus.append($('<Status>FileOK</Status>'))
+        acknowledgement.append(messageStatus)
+        releaseStatus.append(acknowledgement)
       } else {
         releaseStatus.append($('<ReleaseStatus>ProcessingErrorAtReleaseDistributor</ReleaseStatus>'))
-        
-        // Add ErrorText for failures (at ReleaseStatus level)
-        if (error) {
-          releaseStatus.append($(`<ErrorText>${error}</ErrorText>`))
-        }
-      }
-      
-      // Acknowledgement
-      const acknowledgement = $('<Acknowledgement></Acknowledgement>')
-      acknowledgement.append($('<MessageType>NewReleaseMessage</MessageType>'))
-      acknowledgement.append($(`<MessageId>${messageId}</MessageId>`))
-      
-      const messageStatus = $('<MessageStatus></MessageStatus>')
-      if (isSuccess) {
-        messageStatus.append($('<Status>FileOK</Status>'))
-      } else {
-        // Use ResourceCorrupt for errors as per the example
+        const acknowledgement = $('<Acknowledgement></Acknowledgement>')
+        acknowledgement.append($('<MessageType>NewReleaseMessage</MessageType>'))
+        acknowledgement.append($(`<MessageId>${messageId}</MessageId>`))
+        const messageStatus = $('<MessageStatus></MessageStatus>')
         messageStatus.append($('<Status>ResourceCorrupt</Status>'))
+        if (error) {
+          messageStatus.append($(`<StatusMessage>${error}</StatusMessage>`))
+        }
+        acknowledgement.append(messageStatus)
+        releaseStatus.append(acknowledgement)
       }
-      
-      acknowledgement.append(messageStatus)
-      releaseStatus.append(acknowledgement)
       
       root.append(releaseStatus)
     }
@@ -263,7 +262,8 @@ async function sendAcknowledgement(source: string, xml: string) {
     })
     
     if (!statusResponse.ok) {
-      throw new Error(`Status post failed: ${statusResponse.status} ${statusResponse.statusText}`)
+      const errText = await statusResponse.text().catch(() => '')
+      throw new Error(`Status post failed: ${statusResponse.status} ${statusResponse.statusText} ${errText ? '- ' + errText : ''}`)
     }
     
     console.log('Acknowledgement XML posted successfully')
@@ -315,7 +315,8 @@ export async function acknowledgeReleaseSuccess({
       source,
       messageId,
       releases,
-      isSuccess: true
+      isSuccess: true,
+      recipientPartyId: source === 'sme' ? 'PADPIDA2007040502I' : undefined
     }
   )
   console.log(acknowledgementXml)
@@ -337,12 +338,14 @@ export async function acknowledgeReleaseFailure({
   messageId,
   messageTimestamp,
   error,
+  releases,
 }: {
   source: string
   xmlUrl: string
   messageId: string
   messageTimestamp: string
   error: string | Error
+  releases?: DDEXRelease[]
 }) {
   const errorMessage = error instanceof Error ? error.message : error
   
@@ -366,9 +369,10 @@ export async function acknowledgeReleaseFailure({
     {
       source,
       messageId,
-      releases: [], // Empty releases array for failures
+      releases: releases || [], // Include releases when available
       isSuccess: false,
-      error: errorMessage
+      error: errorMessage,
+      recipientPartyId: source === 'sme' ? 'PADPIDA2007040502I' : undefined
     }
   )
   console.log(acknowledgementXml)

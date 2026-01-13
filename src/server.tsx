@@ -23,7 +23,12 @@ import {
 import { DDEXContributor, DDEXRelease, parseDdexXml } from './parseDelivery'
 import { prepareAlbumMetadata, prepareTrackMetadatas } from './publishRelease'
 import { generateSalesReport } from './reporting/sales_report'
-import { dialS3, parseS3Url, readAssetWithCaching } from './s3poller'
+import {
+  dialS3,
+  getPresignedAssetUrl,
+  parseS3Url,
+  readAssetWithCaching,
+} from './s3poller'
 import { sources } from './sources'
 import { parseBool } from './util'
 
@@ -336,6 +341,7 @@ app.get('/releases', async (c) => {
             <th>Genre</th>
             <th>Release</th>
             <th>Clear</th>
+            <th>Status</th>
             <th></th>
             <th></th>
             <th>debug</th>
@@ -397,6 +403,28 @@ ${row.soundRecordings.length} tracks`}
                         100
                       ).toFixed() + '%'}
                     </b>
+                  </div>
+                )}
+              </td>
+              <td>
+                {row.status}
+                {row.problems?.length > 0 && (
+                  <div style={{ marginTop: '4px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                    {row.problems.map((p) => (
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          border: '1px solid var(--pico-muted-border-color, #ccc)',
+                          borderRadius: '4px',
+                          padding: '1px 4px',
+                          fontSize: '11px',
+                          lineHeight: 1.4,
+                        }}
+                        title={p}
+                      >
+                        {p}
+                      </span>
+                    ))}
                   </div>
                 )}
               </td>
@@ -772,6 +800,19 @@ app.get('/release/:source/:key/:ref/:size?', async (c) => {
   const asset = await assetRepo.get(source, key, ref)
   if (!asset) return c.json({ error: 'not found' }, 404)
 
+  // If no resizing requested (a stream instead of an image),
+  // redirect to presigned S3 URL to avoid proxying bytes
+  if (!size) {
+    const url = await getPresignedAssetUrl({
+      xmlUrl: asset.xmlUrl,
+      filePath: asset.filePath,
+      fileName: asset.fileName,
+      expiresInSeconds: 600
+    })
+    return c.redirect(url, 302)
+  }
+
+  // Resize requested: keep existing behavior (read, resize via cache helper) for now
   const ok = await readAssetWithCaching(
     asset.xmlUrl,
     asset.filePath,

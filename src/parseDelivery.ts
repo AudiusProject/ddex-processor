@@ -233,13 +233,27 @@ export async function parseDdexXml(
         // Only send acknowledgement for SME
         source === 'sme'
       ) {
-        await acknowledgeReleaseSuccess({
-          source,
-          xmlUrl,
-          messageId,
-          messageTimestamp,
-          releases,
-        })
+        const hasErrors = releases.some((r) =>
+          r.problems.includes('InvalidDealDate')
+        )
+        if (hasErrors) {
+          await acknowledgeReleaseFailure({
+            source,
+            xmlUrl,
+            messageId,
+            messageTimestamp,
+            releases,
+            error: 'InvalidDealDate',
+          })
+        } else {
+          await acknowledgeReleaseSuccess({
+            source,
+            xmlUrl,
+            messageId,
+            messageTimestamp,
+            releases,
+          })
+        }
       }
       
       return releases
@@ -401,7 +415,7 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
     // DDEX 4.0 structure: DealList > ReleaseDeal > Deal > DealTerms
     $('DealList > ReleaseDeal').each((_, el) => {
       const $el = $(el)
-      const ref = $el.find('ReleaseReference').text()
+      const refs = $el.find('DealReleaseReference').toArray().map(el => $(el).text());
       
       $el.find('Deal > DealTerms').each((_, el) => {
         const $el = $(el)
@@ -434,8 +448,10 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
 
         // add deal
         function addDeal(deal: AudiusSupportedDeal) {
-          releaseDeals[ref] ||= []
-          releaseDeals[ref].push(deal)
+          for (const ref of refs) {
+            releaseDeals[ref] ||= []
+            releaseDeals[ref].push(deal)
+          }
         }
 
         const common: DealFields = {
@@ -770,7 +786,38 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
       const $el = $(el)
 
       const ref = $el.find('ReleaseReference').text()
-      const deals = releaseDeals[ref] || []
+      let deals = releaseDeals[ref] || []
+
+      // For DDEX 4.0, if the album has no direct deals, aggregate from TrackReleases
+      if (deals.length === 0 && isDdex40) {
+        // Build TrackRelease -> Resource mapping
+        const trackRefToResourceRef: Record<string, string> = {}
+        $('ReleaseList > TrackRelease').each((_, el) => {
+          const $tr = $(el)
+          const trRef = $tr.find('ReleaseReference').text()
+          const rrRef = $tr.find('ReleaseResourceReference').text()
+          if (trRef && rrRef) trackRefToResourceRef[trRef] = rrRef
+        })
+
+        // Collect resource refs contained in this album
+        const releaseResourceRefs = new Set<string>()
+        $el
+          .find('ResourceGroup ReleaseResourceReference, ResourceGroupContentItem > ReleaseResourceReference')
+          .each((_, el) => {
+            releaseResourceRefs.add($(el).text())
+          })
+
+        // Find TrackReleases that are members of this album
+        const memberTrackRefs = Object.entries(trackRefToResourceRef)
+          .filter(([, resRef]) => releaseResourceRefs.has(resRef))
+          .map(([trRef]) => trRef)
+
+        const aggregated = memberTrackRefs.flatMap((r) => releaseDeals[r] || [])
+        if (aggregated.length) {
+          deals = aggregated
+        }
+      }
+
       const validityStartDate = deals.length
         ? deals[0].validityStartDate
         : undefined
@@ -812,7 +859,7 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
         producerCopyrightLine: pline($el),
         parentalWarningType: toText($el.find('ParentalWarningType')),
 
-        isMainRelease: $el.attr('IsMainRelease') == 'true',
+        isMainRelease: isDdex40 ? true : $el.attr('IsMainRelease') == 'true',
 
         problems: [],
         soundRecordings: [],
@@ -861,6 +908,40 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
       // deal or no deal?
       if (!release.deals.length) {
         release.problems.push('NoDeal')
+      }
+
+      // Validate FirstPublicationDate/recording releaseDate
+      {
+        const hasInvalidDate = release.soundRecordings.some((sr) => {
+          const dateText = sr.releaseDate || ''
+          const m = dateText.match(/(\d{4})/)
+          if (!m) return true
+          const year = parseInt(m[1])
+          if (!year || year <= 1900) return true
+          return false
+        })
+        if (hasInvalidDate) {
+          release.problems.push('InvalidFirstPublicationDate')
+        }
+      }
+
+      // Validate deal start vs OriginalReleaseDate
+      {
+        const originalReleaseDateText = $el.find('OriginalReleaseDate').text()
+        if (originalReleaseDateText) {
+          const ord = new Date(originalReleaseDateText)
+          if (!isNaN(ord.getTime())) {
+            const invalidDeal = release.deals.some((d) => {
+              if (!d.validityStartDate) return false
+              const ds = new Date(d.validityStartDate)
+              if (isNaN(ds.getTime())) return false
+              return ds < ord
+            })
+            if (invalidDeal) {
+              release.problems.push('InvalidDealDate')
+            }
+          }
+        }
       }
 
       return release
@@ -967,7 +1048,7 @@ function resolveAudiusGenre(
 
   // maybe try some edit distance magic?
   // for now just log
-  console.warn(`failed to resolve genre: subgenre=${subgenre} genre=${genre}`)
+  console.warn(`no matching genre: subgenre=${subgenre} genre=${genre}`)
 }
 
 export function parseDuration(dur: string) {

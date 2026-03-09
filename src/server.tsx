@@ -12,13 +12,13 @@ import { logger } from 'hono/logger'
 import { prettyJSON } from 'hono/pretty-json'
 import { publishToClaimableAccount } from './claimable/createUserPublish'
 import {
-  ReleaseProcessingStatus,
-  ReleaseRow,
-  assetRepo,
-  isClearedRepo,
-  releaseRepo,
-  userRepo,
-  xmlRepo,
+    ReleaseProcessingStatus,
+    ReleaseRow,
+    assetRepo,
+    isClearedRepo,
+    releaseRepo,
+    userRepo,
+    xmlRepo,
 } from './db'
 import { DDEXContributor, DDEXRelease, parseDdexXml } from './parseDelivery'
 import { prepareAlbumMetadata, prepareTrackMetadatas } from './publishRelease'
@@ -95,23 +95,26 @@ app.get('/', async (c) => {
         {me ? (
           <>
             <h4>Welcome back @{me.handle}</h4>
-            <a href="/auth/logout" role="button">
-              log out
+            <a href="/auth/logout" class="btn-secondary">
+              Log out
             </a>
           </>
         ) : (
           <div>
             <div>
-              <a role="button" href={`/auth/source/${firstSource.name}`}>
+              <a
+                class="btn-secondary"
+                href={`/auth/source/${firstSource.name}`}
+              >
                 Login
               </a>
             </div>
 
             <div style="margin-top: 50px">
               <div>Or Choose Auth Provider (Advanced)</div>
-              <div>
+              <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
                 {authSources.map((s) => (
-                  <a style="padding: 4px" href={`/auth/source/${s.name}`}>
+                  <a class="btn-secondary" href={`/auth/source/${s.name}`}>
                     {s.name}
                   </a>
                 ))}
@@ -264,9 +267,8 @@ app.get('/releases', async (c) => {
     <Layout2 title={querySearch || 'Releases'}>
       <h1>Releases</h1>
 
-      <div style="display: flex; gap: 10px;">
-        {/* <!-- filters --> */}
-        <form style="display: flex; flex-grow: 1; gap: 10px;">
+      <div class="releases-filter-bar">
+        <form class="releases-filters-form">
           <input name="search" placeholder="Search" value={querySearch} />
           <select name="status" onchange="this.form.submit()">
             <option selected value="">
@@ -285,11 +287,10 @@ app.get('/releases', async (c) => {
               <option selected={querySource == s.name}>{s.name}</option>
             ))}
           </select>
-          <label style="display: flex; align-items: center;">
+          <label class="filter-toggle">
             <input
               name="cleared"
               type="checkbox"
-              role="switch"
               checked={queryCleared}
               onchange="this.form.submit()"
             />
@@ -298,31 +299,43 @@ app.get('/releases', async (c) => {
         </form>
 
         {showPagination && (
-          <div>
+          <div class="releases-filter-bar-pagination">
+            {offset == 0 ? (
+              <span class="btn-secondary" aria-disabled="true">
+                ← Prev
+              </span>
+            ) : (
+              <a
+                class="btn-secondary"
+                href={withQueryParam('offset', offset - limit)}
+              >
+                ← Prev
+              </a>
+            )}
             <a
-              role="button"
-              class="outline contrast"
-              href={withQueryParam('offset', offset - limit)}
-              disabled={offset == 0}
-            >
-              ⫷
-            </a>
-            <a
-              role="button"
-              class="outline contrast"
+              class="btn-secondary"
               href={withQueryParam('offset', limit + offset)}
             >
-              ⫸
+              Next →
             </a>
           </div>
         )}
 
-        <div>
-          <a
-            role="button"
-            class="outline contrast"
-            href={withQueryParam('csv', 'true')}
-          >
+        <div class="releases-filter-bar-export">
+          <a class="btn-export" href={withQueryParam('csv', 'true')}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" x2="12" y1="15" y2="3" />
+            </svg>
             Export CSV
           </a>
         </div>
@@ -364,7 +377,7 @@ app.get('/releases', async (c) => {
                     : searchLink(row.artists[0]?.name)}
                 </div>
                 <small>
-                  <em title={row.messageTimestamp} class="pico-color-grey-500">
+                  <em title={row.messageTimestamp} class="text-muted">
                     {searchLink(row.labelName)} via{' '}
                     <a class="plain contrast" href={`?source=${row.source}`}>
                       {row.source}
@@ -517,10 +530,11 @@ app.get('/releases/:key', async (c) => {
               >
                 <div>
                   <button
-                    class="outline contrast"
+                    type="button"
+                    class="btn-secondary"
                     onclick={`play("/release/${row.source}/${row.key}/${sr.ref}")`}
                   >
-                    play
+                    Play
                   </button>
                 </div>
                 <div style={{ flexGrow: 1 }}>
@@ -600,6 +614,8 @@ app.get('/releases/:key', async (c) => {
             )}
 
             <button
+              type="button"
+              class="btn-primary"
               disabled={isFutureRelease || isNoDeal}
               onclick="PublishModal.showModal()"
             >
@@ -607,10 +623,7 @@ app.get('/releases/:key', async (c) => {
             </button>
             {(isFutureRelease || isNoDeal) && (
               <div style={{ margin: '8px 0' }}>
-                <a
-                  href="#"
-                  onclick="PublishModal.showModal(); return false;"
-                >
+                <a href="#" onclick="PublishModal.showModal(); return false;">
                   Override
                 </a>
               </div>
@@ -675,12 +688,14 @@ app.get('/releases/:key', async (c) => {
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button
                     type="button"
-                    class="secondary"
+                    class="btn-secondary"
                     onclick="PublishModal.close()"
                   >
                     Cancel
                   </button>
-                  <button type="submit">Publish</button>
+                  <button type="submit" class="btn-primary">
+                    Publish
+                  </button>
                 </div>
               </footer>
             </article>
@@ -713,15 +728,11 @@ app.get('/releases/:key', async (c) => {
               left: 0px;
               width: 100%;
               padding: 10px;
+              background: var(--n-bg-elevated);
+              border-top: 1px solid var(--n-border);
             }
             .playa-wrap audio {
               width: 100%;
-            }
-            .cleared {
-              background: lightgreen;
-            }
-            .not-cleared {
-              background: lightpink;
             }
           </style>
         `}
@@ -988,9 +999,13 @@ app.get('/releases/:releaseId/publog', async (c) => {
         </tbody>
       </table>
 
-      <div style="display: flex; gap: 16px; font-size: 90%;">
-        <a href={`/releases/${release.key}`}>Back to Release</a>
-        <a href="?json=1">View as JSON</a>
+      <div style="display: flex; gap: 0.5rem;">
+        <a class="btn-link" href={`/releases/${release.key}`}>
+          Back to Release
+        </a>
+        <a class="btn-link" href="?json=1">
+          View as JSON
+        </a>
       </div>
 
       {c.req.query('poll') &&
@@ -1044,7 +1059,9 @@ app.get('/report', (c) => {
             />
           </label>
         </fieldset>
-        <button>Generate</button>
+        <button type="submit" class="btn-primary">
+          Generate
+        </button>
       </form>
     </Layout2>
   )
@@ -1124,30 +1141,25 @@ async function audiusUserLink(id: string) {
 function debugLinks(xmlUrl: string, releaseId?: string) {
   return html`
     <a
-      class="plain secondary"
+      class="btn-link"
       href="/xmls/${encodeURIComponent(xmlUrl)}"
       target="_blank"
       >xml</a
     >
-
     <a
-      class="plain secondary"
+      class="btn-link"
       href="/xmls/${encodeURIComponent(xmlUrl)}?parse=true"
       target="_blank"
     >
       parsed
     </a>
-
-    <a
-      class="plain secondary"
-      href="/xmls/${encodeURIComponent(xmlUrl)}?parse=sdk"
+    <a class="btn-link" href="/xmls/${encodeURIComponent(xmlUrl)}?parse=sdk"
       >sdk</a
     >
-
     ${releaseId &&
     html`
-      <a class="plain secondary" href="/history/${releaseId}">history</a>
-      <a class="plain secondary" href="/releases/${releaseId}/publog">publog</a>
+      <a class="btn-link" href="/history/${releaseId}">history</a>
+      <a class="btn-link" href="/releases/${releaseId}/publog">publog</a>
     `}
   `
 }

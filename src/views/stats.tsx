@@ -78,7 +78,7 @@ app.get('/:source', async (c) => {
                 <div>
                   {genres.map((g: string) => (
                     <a
-                      style="font-size: 80%; background: lightyellow; margin: 3px; padding: 3px;"
+                      class="tag"
                       href={`/releases?search=${encodeURIComponent(g)}`}
                     >
                       {g}
@@ -92,8 +92,10 @@ app.get('/:source', async (c) => {
       </table>
 
       {stats.length > 0 && (
-        <div style="padding: 20px 0 40px 0">
-          <a href={`?after=${encodeURIComponent(stats.at(-1)![0])}`}>NEXT</a>
+        <div style="padding: 2rem 0;">
+          <a class="btn-secondary" href={`?after=${encodeURIComponent(stats.at(-1)![0])}`}>
+            Load more →
+          </a>
         </div>
       )}
     </Layout2>

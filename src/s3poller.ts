@@ -184,7 +184,7 @@ export async function readAssetWithCaching(
     const cacheBaseDir = `/tmp/ddex_cache`
     const s3url = new URL(`${filePath}${fileName}`, xmlUrl)
     const Bucket = s3url.host
-    const Key = s3url.pathname.substring(1)
+    const Key = decodeURIComponent(s3url.pathname.substring(1))
     const destinationPath = join(
       ...[cacheBaseDir, Bucket, imageSize, Key].filter(Boolean)
     )

@@ -921,7 +921,7 @@ export function parseReleaseIds($el: CH): DDEXReleaseIds {
   return omitEmpty({
     party_id: toText($el.find('ReleaseId > PartyId')),
     catalog_number: toText($el.find('ReleaseId > CatalogNumber')),
-    icpn: toText($el.find('ReleaseId > ICPN')),
+    icpn: toText($el.find('ReleaseId > ICPN')) || toText($el.find('ReleaseId > UPC')),
     grid: toText($el.find('ReleaseId > GRid')),
     isan: toText($el.find('ReleaseId > ISAN')),
     isbn: toText($el.find('ReleaseId > ISBN')),

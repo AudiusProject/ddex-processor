@@ -179,10 +179,11 @@ export async function readAssetWithCaching(
   imageSize: string = '',
   skipRead?: boolean
 ) {
+  const pathPart = filePath ? `${filePath}${fileName}` : fileName // empty filePath = current dir
   // read from s3 + cache to local disk
   if (xmlUrl.startsWith('s3:')) {
     const cacheBaseDir = `/tmp/ddex_cache`
-    const s3url = new URL(`${filePath}${fileName}`, xmlUrl)
+    const s3url = new URL(pathPart, xmlUrl)
     const Bucket = s3url.host
     const Key = decodeURIComponent(s3url.pathname.substring(1))
     const destinationPath = join(
@@ -231,7 +232,7 @@ export async function readAssetWithCaching(
   }
 
   // read from local disk
-  const fileUrl = resolve(xmlUrl, '..', filePath, fileName)
+  const fileUrl = resolve(xmlUrl, '..', pathPart)
   return readFileToBuffer(fileUrl)
 }
 

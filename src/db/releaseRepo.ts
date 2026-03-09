@@ -139,7 +139,7 @@ export const releaseRepo = {
     // pull out original resource URLs
     // so if an update comes in we can still resolve the original file
     for (const r of [...release.soundRecordings, ...release.images]) {
-      if (r.ref && r.filePath && r.fileName) {
+      if (r.ref && r.fileName) {
         await assetRepo.upsert({
           source: source,
           releaseId: key,

@@ -483,6 +483,160 @@ export function Layout2({
             background: var(--n-primary);
             color: white;
           }
+
+          /* Custom audio player (fixed at bottom) */
+          .playa-wrap {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 1rem 1.5rem;
+            background: var(--n-bg-elevated);
+            border-top: 1px solid var(--n-border);
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+            z-index: 50;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+          }
+          [data-theme='dark'] .playa-wrap {
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+          }
+          .playa-player {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            width: 100%;
+            max-width: 720px;
+          }
+          .playa-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-shrink: 0;
+          }
+          .playa-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border: none;
+            border-radius: 50%;
+            background: var(--n-primary-muted);
+            color: var(--n-primary);
+            cursor: pointer;
+            transition:
+              background 0.15s,
+              color 0.15s;
+          }
+          .playa-btn:hover {
+            background: var(--n-primary);
+            color: white;
+          }
+          .playa-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+          }
+          .playa-btn svg {
+            width: 18px;
+            height: 18px;
+          }
+          .playa-btn-play svg {
+            width: 20px;
+            height: 20px;
+          }
+          .playa-track-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.125rem;
+            min-width: 0;
+            flex: 1;
+            max-width: 200px;
+          }
+          .playa-track-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--n-fg);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .playa-track-artist {
+            font-size: 0.8rem;
+            color: var(--n-fg-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .playa-progress-wrap {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            min-width: 0;
+          }
+          .playa-time {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--n-fg-muted);
+            flex-shrink: 0;
+            width: 2.5rem;
+          }
+          .playa-time-current {
+            text-align: right;
+          }
+          .playa-time-duration {
+            text-align: left;
+          }
+          .playa-progress-track {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            min-height: 20px;
+            min-width: 0;
+          }
+          .playa-progress {
+            flex: 1;
+            width: 100%;
+            -webkit-appearance: none;
+            appearance: none;
+            margin: 0;
+            padding: 0;
+            background: transparent;
+          }
+          .playa-progress::-webkit-slider-runnable-track {
+            height: 20px;
+            background: linear-gradient(var(--n-border) 0 0) 50% / 100% 6px no-repeat;
+            cursor: pointer;
+          }
+          .playa-progress::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            margin-top: 3px;
+            border-radius: 50%;
+            background: var(--n-primary);
+            cursor: pointer;
+            transition: transform 0.15s;
+          }
+          .playa-progress::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+          }
+          .playa-progress::-moz-range-track {
+            height: 6px;
+            background: var(--n-border);
+            border-radius: 3px;
+          }
+          .playa-progress::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: none;
+            background: var(--n-primary);
+            cursor: pointer;
+          }
           .truncate {
             max-width: 300px;
             white-space: nowrap;

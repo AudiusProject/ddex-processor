@@ -703,38 +703,146 @@ app.get('/releases/:key', async (c) => {
         </dialog>
 
         <div style={{ marginTop: '100px' }}></div>
-        <div class="playa-wrap">
-          <audio id="playa" controls></audio>
+        <div class="playa-wrap" data-tracks={JSON.stringify(parsedRelease.soundRecordings.map((sr) => ({ url: `/release/${row.source}/${row.key}/${sr.ref}`, title: [sr.title, sr.subTitle].filter(Boolean).join(' '), artist: sr.artists[0]?.name || parsedRelease.artists[0]?.name || '' })))}>
+          <audio id="playa" style="display:none"></audio>
+          <div class="playa-player">
+            <div class="playa-controls">
+              <button type="button" class="playa-btn playa-btn-prev" id="playa-prev" aria-label="Previous" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+              </button>
+              <button type="button" class="playa-btn playa-btn-play" id="playa-play" aria-label="Play">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" id="playa-icon-play"><path d="M8 5v14l11-7z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" id="playa-icon-pause" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+              </button>
+              <button type="button" class="playa-btn playa-btn-next" id="playa-next" aria-label="Next" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+              </button>
+            </div>
+            <div class="playa-track-info" id="playa-track-info">
+              <span class="playa-track-title" id="playa-track-title">—</span>
+              <span class="playa-track-artist" id="playa-track-artist"></span>
+            </div>
+            <div class="playa-progress-wrap">
+              <span class="playa-time playa-time-current" id="playa-current">0:00</span>
+              <div class="playa-progress-track">
+                <input type="range" class="playa-progress" id="playa-progress" min="0" max="100" value="0" step="0.1" aria-label="Progress" />
+              </div>
+              <span class="playa-time playa-time-duration" id="playa-duration">0:00</span>
+            </div>
+          </div>
         </div>
 
         {html`
           <script>
-            function play(url) {
-              playa.onloadstart = () => console.log('loading...')
-              playa.oncanplay = () => console.log('OK')
-              if (playa.src.includes(url)) {
-                playa.paused ? playa.play() : playa.pause()
-              } else {
-                playa.src = url
-                playa.play()
-              }
-            }
-          </script>
+            (function() {
+              var tracksData = JSON.parse(document.querySelector('.playa-wrap').getAttribute('data-tracks') || '[]');
+              var tracks = tracksData.map(function(t) { return typeof t === 'string' ? t : t.url; });
+              var playa = document.getElementById('playa');
+              var prevBtn = document.getElementById('playa-prev');
+              var playBtn = document.getElementById('playa-play');
+              var nextBtn = document.getElementById('playa-next');
+              var progressEl = document.getElementById('playa-progress');
+              var currentEl = document.getElementById('playa-current');
+              var durationEl = document.getElementById('playa-duration');
+              var iconPlay = document.getElementById('playa-icon-play');
+              var iconPause = document.getElementById('playa-icon-pause');
+              var trackTitleEl = document.getElementById('playa-track-title');
+              var trackArtistEl = document.getElementById('playa-track-artist');
+              var currentIndex = 0;
+              var isSeeking = false;
 
-          <style>
-            .playa-wrap {
-              position: fixed;
-              bottom: 0px;
-              left: 0px;
-              width: 100%;
-              padding: 10px;
-              background: var(--n-bg-elevated);
-              border-top: 1px solid var(--n-border);
-            }
-            .playa-wrap audio {
-              width: 100%;
-            }
-          </style>
+              function formatTime(s) {
+                var m = Math.floor(s / 60);
+                var sec = Math.floor(s % 60);
+                return m + ':' + (sec < 10 ? '0' : '') + sec;
+              }
+              function updateUI() {
+                var hasTracks = tracks.length > 0;
+                prevBtn.disabled = !hasTracks || currentIndex <= 0;
+                nextBtn.disabled = !hasTracks || currentIndex >= tracks.length - 1;
+                if (tracksData[currentIndex]) {
+                  var t = tracksData[currentIndex];
+                  trackTitleEl.textContent = (t.title || '—');
+                  trackArtistEl.textContent = (t.artist || '');
+                }
+                if (!isSeeking && playa.duration && !isNaN(playa.duration)) {
+                  progressEl.value = (playa.currentTime / playa.duration) * 100;
+                  currentEl.textContent = formatTime(playa.currentTime);
+                  durationEl.textContent = formatTime(playa.duration);
+                }
+                if (playa.paused) {
+                  iconPlay.style.display = 'block';
+                  iconPause.style.display = 'none';
+                } else {
+                  iconPlay.style.display = 'none';
+                  iconPause.style.display = 'block';
+                }
+              }
+              playa.addEventListener('timeupdate', updateUI);
+              playa.addEventListener('loadedmetadata', function() {
+                durationEl.textContent = formatTime(playa.duration);
+              });
+              playa.addEventListener('ended', function() {
+                if (currentIndex < tracks.length - 1) {
+                  currentIndex++;
+                  playa.src = tracks[currentIndex];
+                  playa.play();
+                  updateUI();
+                } else {
+                  updateUI();
+                }
+              });
+              prevBtn.onclick = function() {
+                if (currentIndex > 0) {
+                  currentIndex--;
+                  playa.src = tracks[currentIndex];
+                  playa.play();
+                  updateUI();
+                }
+              };
+              playBtn.onclick = function() {
+                if (tracks.length === 0) return;
+                if (playa.paused) {
+                  if (!playa.src || playa.src === window.location.href) {
+                    playa.src = tracks[currentIndex];
+                  }
+                  playa.play();
+                } else {
+                  playa.pause();
+                }
+              };
+              nextBtn.onclick = function() {
+                if (currentIndex < tracks.length - 1) {
+                  currentIndex++;
+                  playa.src = tracks[currentIndex];
+                  playa.play();
+                  updateUI();
+                }
+              };
+              progressEl.addEventListener('mousedown', function() { isSeeking = true; });
+              progressEl.addEventListener('mouseup', function() { isSeeking = false; });
+              progressEl.addEventListener('touchstart', function() { isSeeking = true; });
+              progressEl.addEventListener('touchend', function() { isSeeking = false; });
+              progressEl.addEventListener('input', function() {
+                if (playa.duration && !isNaN(playa.duration)) {
+                  playa.currentTime = (progressEl.value / 100) * playa.duration;
+                }
+              });
+              window.play = function(url) {
+                var idx = tracks.indexOf(url);
+                if (idx >= 0) {
+                  currentIndex = idx;
+                  playa.src = url;
+                  playa.play();
+                  updateUI();
+                } else {
+                  playa.src = url;
+                  playa.play();
+                }
+              };
+              updateUI();
+            })();
+          </script>
         `}
       </>
     </Layout2>

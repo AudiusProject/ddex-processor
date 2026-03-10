@@ -887,6 +887,16 @@ async function parseReleaseXml(
         release.problems.push('NoDeal')
       }
 
+      // inherit genre from sound recordings when release has none (Volume/ERN 382 style)
+      if (!release.audiusGenre && release.soundRecordings.length) {
+        const firstWithGenre = release.soundRecordings.find((sr) => sr.audiusGenre)
+        if (firstWithGenre) {
+          release.genre = firstWithGenre.genre
+          release.subGenre = firstWithGenre.subGenre
+          release.audiusGenre = firstWithGenre.audiusGenre
+        }
+      }
+
       return release
     })
 
@@ -967,6 +977,8 @@ const genreMapping: Record<string, Genre> = {
   'Indie Rock': Genre.ALTERNATIVE,
   Inspirational: Genre.AMBIENT,
   'Hip Hop': Genre.HIP_HOP_RAP,
+
+  // Exact Audius Genre mappings:
   Rock: Genre.ROCK,
   Metal: Genre.METAL,
   Alternative: Genre.ALTERNATIVE,

@@ -334,7 +334,7 @@ async function parseReleaseXml(
     if (isDdex40) {
       // DDEX 4.0 structure
       if (tagName === 'DisplayArtist') {
-        return $el
+        let artists = $el
           .find('DisplayArtist')
           .toArray()
           .map((el) => {
@@ -345,6 +345,11 @@ async function parseReleaseXml(
               role: role,
             }
           })
+        if (!artists.length) {
+          const name = toText($el.find('DisplayArtistName'))
+          if (name) artists = [{ name, role: 'MainArtist' }]
+        }
+        return artists
       } else if (
         tagName === 'ResourceContributor' ||
         tagName === 'IndirectResourceContributor'
@@ -367,7 +372,7 @@ async function parseReleaseXml(
       const roleTagName =
         tagName == 'DisplayArtist' ? 'ArtistRole' : `${tagName}Role`
 
-      return $el
+      let result = $el
         .find(tagName)
         .toArray()
         .map((el) => {
@@ -377,6 +382,11 @@ async function parseReleaseXml(
             role: roleTag.attr('UserDefinedValue') || roleTag.text(),
           }
         })
+      if (tagName === 'DisplayArtist' && !result.length) {
+        const name = toText($el.find('DisplayArtistName'))
+        if (name) result = [{ name, role: 'MainArtist' }]
+      }
+      return result
     }
     return []
   }

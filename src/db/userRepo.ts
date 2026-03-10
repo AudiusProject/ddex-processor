@@ -27,7 +27,9 @@ export const userRepo = {
 
   async match(apiKey: string, artistNames: string[]) {
     const artistSet = new Set(artistNames.map(lowerAscii))
-    const users = await this.all()
+    const users = await sql`
+      select * from users where "apiKey" = ${apiKey}
+    `
     for (const u of users) {
       if (
         artistSet.has(lowerAscii(u.name)) ||

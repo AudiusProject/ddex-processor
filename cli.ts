@@ -319,12 +319,7 @@ async function startWorker() {
     await pollS3()
     await pollForNewLSRFiles()
     await clmReport()
-
-    // for now we publish manually via CLI
-    // because album publish can fail
-    // want to have human in loop to clean up orphans tracks when that happens.
-    // await publishValidPendingReleases()
-
+    await publishValidPendingReleases()
     await sleep(5 * 60_000)
   }
 }

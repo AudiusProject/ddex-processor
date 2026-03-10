@@ -39,6 +39,9 @@ export async function publishValidPendingReleases() {
     if (!source) {
       continue
     }
+    if (!row.audiusUser) {
+      continue
+    }
     const parsed = row
 
     if (row.status == ReleaseProcessingStatus.DeletePending) {

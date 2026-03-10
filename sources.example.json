@@ -5,6 +5,7 @@
       "name": "sourceA",
       "ddexKey": "",
       "ddexSecret": "",
+      "autoPublish": false,
       "awsKey": "",
       "awsSecret": "",
       "awsRegion": "",

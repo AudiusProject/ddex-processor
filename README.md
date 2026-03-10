@@ -2,15 +2,16 @@
 
 A node.js program + webapp to ingest DDEX files and publish them to Audius.
 
-
 You configure multiple sources (in `data/sources.json`) and point them to S3 buckets.
 The crawler will look for new XML files in the S3 buckets, parse the details and publish the music if preconditions are met.
 
 Tracks are either
-1. Published automatically to an artist profile that authorizes the source keypair to distribute on their behalf. This is done using the [Audius SDK oauth method](https://docs.audius.org/developers/sdk/oauth).
-2. Published manually using the UI tools provided in this package
 
-* See [README_DEV](./README_DEV.md) for dev setup.
+1. Published automatically to an artist profile that authorizes the source keypair to distribute on their behalf. This is done using the [Audius SDK oauth method](https://docs.audius.org/developers/sdk/oauth).
+2. Published automatically to a claimable user account when `autoPublish: true` for a given source
+3. Published manually using the UI tools provided in this package
+
+- See [README_DEV](./README_DEV.md) for dev setup.
 
 ## Docker
 
@@ -28,6 +29,7 @@ This application can be run as a Docker container. The container runs both the s
 ```
 
 The script will:
+
 - Build the Docker image with the tag `audius/ddex:latest` (and version tag if provided)
 - Optionally push to Docker Hub after building
 
@@ -45,6 +47,7 @@ SKIP_SDK_PUBLISH='true'
 ```
 
 **Access control:**
+
 - **Super admins** (in `ADMIN_HANDLES`): Full access to all sources, Stats, Sales Report, and Admin (source admin management).
 - **Source admins**: Granted per-source in the Admin UI. They see only Releases and Users for their assigned source(s).
 - **No access**: Logged-in users with no admin role see only the Home screen.
@@ -65,6 +68,7 @@ docker run -p 8989:8989 \
 ```
 
 The container will:
+
 - Run the server on port 8989
 - Run the worker process to poll S3 buckets
 - Both processes are managed by PM2

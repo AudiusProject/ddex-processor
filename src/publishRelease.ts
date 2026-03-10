@@ -1,5 +1,6 @@
 import { UploadAlbumRequest, UploadTrackRequest } from '@audius/sdk'
 import Web3 from 'web3'
+import { publishToClaimableAccount } from './claimable/createUserPublish'
 import {
   ReleaseProcessingStatus,
   ReleaseRow,
@@ -40,6 +41,14 @@ export async function publishValidPendingReleases() {
       continue
     }
     if (!row.audiusUser) {
+      if (source.autoPublish) {
+        try {
+          await publishToClaimableAccount(row.key)
+        } catch (e: any) {
+          console.log('auto-publish failed', row.key, e)
+          await releaseRepo.addPublishError(row.key, e)
+        }
+      }
       continue
     }
     const parsed = row

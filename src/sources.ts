@@ -26,6 +26,7 @@ export type SourceConfig = BucketConfig & {
   name: string
   ddexKey: string
   ddexSecret: string
+  autoPublish?: boolean
   placementHosts?: string
   payoutUserId?: string
   labelUserIds: Record<string, string>

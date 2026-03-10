@@ -42,6 +42,8 @@ Create `data/sources.json` file like:
 
 **Source admins:** Super admins can add Audius handles as admins of a given source via `/admin`. Those users will see a filtered view (Releases + Users for their source) on next login.
 
+**`autoPublish`:** Set `"autoPublish": true` on a source to have the worker automatically publish releases. For each release without an assigned user, it will match an existing authorized user by artist name, or create a claimable account if none exists. Requires hedgehog/identity to be configured for claimable account creation.
+
 Parse + print a local file:
 
 ```bash
@@ -69,7 +71,6 @@ If you want to delete the state and re-crawl from the start
 ```bash
 make reset-database
 ```
-
 
 ---
 

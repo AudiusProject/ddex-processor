@@ -212,9 +212,9 @@ export const releaseRepo = {
     await sql`
       update releases set
         status=${status},
-        lastPublishError=${errText},
-        publishErrorCount=publishErrorCount+1
-      where key = ${key}
+        "lastPublishError"=${errText},
+        "publishErrorCount" = "publishErrorCount" + 1
+      where "key" = ${key}
     `
   },
 }

@@ -133,6 +133,14 @@ const steps = [
     msg text,
     extra jsonb
   );`,
+
+  sql`
+  create table if not exists source_admins (
+    handle text not null,
+    source_name text not null,
+    created_at timestamptz default now(),
+    primary key (handle, source_name)
+  );`,
 ]
 
 // poor man's migrate

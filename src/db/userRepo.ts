@@ -25,6 +25,13 @@ export const userRepo = {
     `
   },
 
+  async byApiKeys(apiKeys: string[]): Promise<UserRow[]> {
+    if (apiKeys.length === 0) return []
+    const users: UserRow[] =
+      await sql`select * from users where "apiKey" = any(${apiKeys})`
+    return users
+  },
+
   async match(apiKey: string, artistNames: string[]) {
     const artistSet = new Set(artistNames.map(lowerAscii))
     const users = await sql`

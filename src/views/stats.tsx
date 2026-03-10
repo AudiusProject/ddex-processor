@@ -14,7 +14,7 @@ app.get('/', async (c) => {
     await sql`select source, count(*) count from releases group by 1 order by 2 desc`.values()
 
   return c.html(
-    <Layout2 title="stats">
+    <Layout2 title="stats" navMode="full">
       <h1>Stats</h1>
 
       <table>
@@ -54,7 +54,7 @@ app.get('/:source', async (c) => {
     `.values()
 
   return c.html(
-    <Layout2 title={`stats: ${source}`}>
+    <Layout2 title={`stats: ${source}`} navMode="full">
       <h1>Source: {source}</h1>
 
       <table>

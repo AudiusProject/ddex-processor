@@ -39,9 +39,15 @@ The script will:
 COOKIE_SECRET='openssl rand -hex 16'
 NODE_ENV='production'
 DDEX_URL='https://ddex.example.com'
-ADMIN_HANDLES='user1,user2'
+DDEX_API_KEY='your-audius-oauth-app-key'   # Create an app at audius.co/settings or staging.audius.co/settings
+ADMIN_HANDLES='user1,user2'                # Super admins (comma-separated handles)
 SKIP_SDK_PUBLISH='true'
 ```
+
+**Access control:**
+- **Super admins** (in `ADMIN_HANDLES`): Full access to all sources, Stats, Sales Report, and Admin (source admin management).
+- **Source admins**: Granted per-source in the Admin UI. They see only Releases and Users for their assigned source(s).
+- **No access**: Logged-in users with no admin role see only the Home screen.
 
 2. Create a `data/sources.json` file configured
 

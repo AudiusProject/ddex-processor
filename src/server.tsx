@@ -20,6 +20,7 @@ import {
     userRepo,
     xmlRepo,
 } from './db'
+import { sourceAdminRepo } from './db/sourceAdminRepo'
 import { DDEXContributor, DDEXRelease, parseDdexXml } from './parseDelivery'
 import { prepareAlbumMetadata, prepareTrackMetadatas } from './publishRelease'
 import { generateSalesReport } from './reporting/sales_report'
@@ -40,11 +41,16 @@ const ADMIN_HANDLES = (process.env.ADMIN_HANDLES || '')
   .split(',')
   .map((h) => h.toLowerCase().trim())
 
+const DDEX_API_KEY = process.env.DDEX_API_KEY
+
 // validate ENV
 if (!DDEX_URL) console.warn('DDEX_URL not defined')
 if (!COOKIE_SECRET) {
   console.warn('COOKIE_SECRET env var missing')
   process.exit(1)
+}
+if (!DDEX_API_KEY) {
+  console.warn('DDEX_API_KEY env var missing - login will not work')
 }
 
 // globals
@@ -69,27 +75,26 @@ app.use(async (c, next) => {
   await next()
 })
 
+function getNavMode(me: ResolvedUser | undefined): 'full' | 'source_admin' | 'none' {
+  if (!me) return 'none'
+  if (me.isSuperAdmin) return 'full'
+  if (me.sourceAdminSources.length > 0) return 'source_admin'
+  return 'none'
+}
+
 app.get('/', async (c) => {
   const me = c.get('me')
-  const authSources = sources.all().filter((s) => s.ddexKey && s.ddexSecret)
-  const firstSource = authSources[0]
-  if (!firstSource) {
-    return c.text(
-      'No valid sources found.  Check data/sources.json is configured correctly',
-      500
-    )
-  }
+  const navMode = getNavMode(me)
 
   return c.html(
-    <Layout2 title="DDEX">
+    <Layout2 title="DDEX" navMode={navMode}>
       <div class="container">
         <h1>Audius DDEX</h1>
 
         {c.req.query('loginRequired') && (
-          <>
+          <div style={{ marginBottom: '1.5rem' }}>
             <mark>Please login to continue</mark>
-            <br />
-          </>
+          </div>
         )}
 
         {me ? (
@@ -100,38 +105,22 @@ app.get('/', async (c) => {
             </a>
           </>
         ) : (
-          <div>
-            <div>
-              <a
-                class="btn-secondary"
-                href={`/auth/source/${firstSource.name}`}
-              >
-                Login
-              </a>
-            </div>
-
-            <div style="margin-top: 50px">
-              <div>Or Choose Auth Provider (Advanced)</div>
-              <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                {authSources.map((s) => (
-                  <a class="btn-secondary" href={`/auth/source/${s.name}`}>
-                    {s.name}
-                  </a>
-                ))}
-              </div>
-            </div>
-          </div>
+          DDEX_API_KEY ? (
+            <a class="btn-secondary" href="/auth/login">
+              Login
+            </a>
+          ) : (
+            <mark>DDEX_API_KEY not configured. Set DDEX_API_KEY in env.</mark>
+          )
         )}
       </div>
     </Layout2>
   )
 })
 
-app.get('/auth/source/:sourceName', (c) => {
-  const sourceName = c.req.param('sourceName')
-  const source = sources.findByName(sourceName)
-  if (!source) {
-    return c.text(`no source named: ${sourceName}`, 400)
+app.get('/auth/login', (c) => {
+  if (!DDEX_API_KEY) {
+    return c.text('DDEX_API_KEY not configured', 500)
   }
   const myUrl = DDEX_URL || 'http://localhost:8989'
   const base = IS_PROD
@@ -140,16 +129,15 @@ app.get('/auth/source/:sourceName', (c) => {
   const params = new URLSearchParams({
     scope: 'write',
     redirect_uri: `${myUrl}/auth/redirect`,
-    api_key: source.ddexKey,
+    api_key: DDEX_API_KEY,
     response_mode: 'query',
   })
-  const u = base + params.toString()
-  return c.redirect(u)
+  return c.redirect(base + params.toString())
 })
 
 app.get('/auth/redirect', async (c) => {
   try {
-    const uri = c.req.query('redirect_uri') || ''
+    const uri = c.req.query('redirect_uri') || '/'
     const token = c.req.query('token')
     if (!token) {
       throw new Error('no token')
@@ -161,30 +149,24 @@ app.get('/auth/redirect', async (c) => {
       throw new Error('invalid payload')
     }
 
-    // upsert user record
-    await userRepo.upsert({
-      apiKey: payload.apiKey,
-      id: payload.userId,
-      handle: payload.handle,
-      name: payload.name,
-      createdAt: new Date(),
-    })
-
-    // set cookie
+    // set cookie (logged-in user; userRepo is for distribution users who authorized sources)
     const j = JSON.stringify(payload)
     await setSignedCookie(c, COOKIE_NAME, j, COOKIE_SECRET!)
 
-    const params = new URLSearchParams({ token })
-    return c.redirect(`${uri}/?` + params.toString())
+    return c.redirect(uri)
   } catch (e) {
     console.log(e)
     return c.body('invalid jwt', 400)
   }
 })
 
-// ====================== AUTH REQUIRED ======================
+// ====================== AUTH REQUIRED (exclude /, /auth/*, /static/*) ======================
 
 app.use('*', async (c, next) => {
+  const path = new URL(c.req.url).pathname
+  if (path === '/' || path.startsWith('/auth/') || path.startsWith('/static/')) {
+    return next()
+  }
   const me = c.get('me')
   if (!me) return c.redirect('/?loginRequired=true')
   await next()
@@ -200,24 +182,44 @@ app.get('/auth/logout', async (c) => {
   return c.redirect('/')
 })
 
-// ====================== ADMIN REQUIRED ======================
+// ---------------------- Access helpers ----------------------
 
-app.use('*', async (c, next) => {
-  const me = c.get('me')
-  if (!me?.isAdmin) {
-    return c.text('you are not admin')
+function requireSuperAdmin(c: Context): boolean {
+  const me = c.get('me') as ResolvedUser | undefined
+  if (!me?.isSuperAdmin) {
+    return false
   }
-  await next()
-})
+  return true
+}
+
+function requireSourceAdminOrSuper(c: Context): boolean {
+  const me = c.get('me') as ResolvedUser | undefined
+  if (!me?.hasAnyAccess) {
+    return false
+  }
+  return true
+}
 
 app.get('/releases', async (c) => {
+  const me = c.get('me') as ResolvedUser
+  if (!requireSourceAdminOrSuper(c)) {
+    return c.text('Access denied', 403)
+  }
+
   const queryCleared = c.req.query('cleared') == 'on'
   const querySearch = c.req.query('search')
   const queryStatus = c.req.query('status')
-  const querySource = c.req.query('source')
+  let querySource = c.req.query('source')
   let limit = parseInt(c.req.query('limit') || '100')
   let offset = parseInt(c.req.query('offset') || '0')
   console.log('query', c.req.query())
+
+  const allowedSources = me.isSuperAdmin
+    ? sources.all().map((s) => s.name)
+    : me.sourceAdminSources
+  if (!me.isSuperAdmin && querySource && !allowedSources.includes(querySource)) {
+    querySource = allowedSources[0] ?? ''
+  }
 
   const csvExport = parseBool(c.req.query('csv'))
   if (csvExport) {
@@ -225,13 +227,21 @@ app.get('/releases', async (c) => {
     offset = 0
   }
 
-  const rows = await releaseRepo.all({
-    ...c.req.query(),
+  const releaseParams: Parameters<typeof releaseRepo.all>[0] = {
     pendingPublish: parseBool(c.req.query('pendingPublish')),
-    cleared: queryCleared,
+    cleared: me.isSuperAdmin ? queryCleared : undefined,
     limit: limit,
     offset: offset,
-  })
+    status: queryStatus || undefined,
+    search: querySearch || undefined,
+  }
+  if (me.isSuperAdmin) {
+    releaseParams.source = querySource || undefined
+  } else {
+    releaseParams.sources = allowedSources
+  }
+
+  const rows = await releaseRepo.all(releaseParams)
 
   if (csvExport) {
     const csv = stringify(rows, {
@@ -263,8 +273,10 @@ app.get('/releases', async (c) => {
     </a>`
   }
 
+  const navMode = getNavMode(me)
+
   return c.html(
-    <Layout2 title={querySearch || 'Releases'}>
+    <Layout2 title={querySearch || 'Releases'} navMode={navMode}>
       <h1>Releases</h1>
 
       <div class="releases-filter-bar">
@@ -283,19 +295,21 @@ app.get('/releases', async (c) => {
               Source
             </option>
 
-            {sources.all().map((s) => (
-              <option selected={querySource == s.name}>{s.name}</option>
+            {allowedSources.map((name) => (
+              <option selected={querySource == name}>{name}</option>
             ))}
           </select>
-          <label class="filter-toggle">
-            <input
-              name="cleared"
-              type="checkbox"
-              checked={queryCleared}
-              onchange="this.form.submit()"
-            />
-            Cleared
-          </label>
+          {me.isSuperAdmin && (
+            <label class="filter-toggle">
+              <input
+                name="cleared"
+                type="checkbox"
+                checked={queryCleared}
+                onchange="this.form.submit()"
+              />
+              Cleared
+            </label>
+          )}
         </form>
 
         {showPagination && (
@@ -442,9 +456,19 @@ ${row.soundRecordings.length} tracks`}
 })
 
 app.get('/releases/:key', async (c) => {
+  const me = c.get('me') as ResolvedUser
+  if (!requireSourceAdminOrSuper(c)) {
+    return c.text('Access denied', 403)
+  }
   const releaseId = c.req.param('key')
   const row = await releaseRepo.get(releaseId)
   if (!row) return c.json({ error: 'not found' }, 404)
+  if (
+    !me.isSuperAdmin &&
+    !me.sourceAdminSources.includes(row.source)
+  ) {
+    return c.text('Access denied', 403)
+  }
   if (c.req.query('json') != undefined) {
     return c.json(row)
   }
@@ -488,8 +512,9 @@ app.get('/releases/:key', async (c) => {
       <td>${section}</td>
     </tr>`
 
+  const navMode = getNavMode(me)
   return c.html(
-    <Layout2 title={parsedRelease.title}>
+    <Layout2 title={parsedRelease.title} navMode={navMode}>
       <>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <div style={{ flexGrow: 1 }}>
@@ -849,12 +874,127 @@ app.get('/releases/:key', async (c) => {
   )
 })
 
+app.use('/stats/*', async (c, next) => {
+  if (!requireSuperAdmin(c)) return c.text('Super admin only', 403)
+  await next()
+})
 app.route('/stats', stats)
 
-app.get('/history/:key', async (c) => {
-  const xmls = await xmlRepo.find(c.req.param('key'))
+function canManageSource(me: ResolvedUser, sourceName: string): boolean {
+  return me.isSuperAdmin || me.sourceAdminSources.includes(sourceName)
+}
+
+app.get('/admin', async (c) => {
+  if (!requireSourceAdminOrSuper(c)) return c.text('Access denied', 403)
+  const me = c.get('me') as ResolvedUser
+  const allAdmins = await sourceAdminRepo.all()
+  const managedSources = me.isSuperAdmin
+    ? sources.all().map((s) => s.name)
+    : me.sourceAdminSources
+  const visibleAdmins = me.isSuperAdmin
+    ? allAdmins
+    : allAdmins.filter((a) => managedSources.includes(a.source_name))
+  const navMode = getNavMode(me)
+
   return c.html(
-    <Layout2 title="XML History">
+    <Layout2 title="Source Admins" navMode={navMode}>
+      <h1>Source Admins</h1>
+      <p>Add an Audius handle to grant them admin access to a source. They will see it on next login.</p>
+
+      <form method="post" action="/admin/add" style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
+          <label>
+            Audius Handle
+            <input type="text" name="handle" placeholder="handle" required />
+          </label>
+          <label>
+            Source
+            <select name="sourceName" required>
+              <option value="">Select source</option>
+              {managedSources.map((name) => (
+                <option value={name}>{name}</option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" class="btn-primary">Add Admin</button>
+        </div>
+      </form>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Handle</th>
+            <th>Source</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {visibleAdmins.map((a) => (
+            <tr>
+              <td>{a.handle}</td>
+              <td>{a.source_name}</td>
+              <td>
+                {canManageSource(me, a.source_name) && (
+                  <form method="post" action="/admin/remove" style={{ display: 'inline' }}>
+                    <input type="hidden" name="handle" value={a.handle} />
+                    <input type="hidden" name="sourceName" value={a.source_name} />
+                    <button type="submit" class="btn-primary">Remove</button>
+                  </form>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Layout2>
+  )
+})
+
+app.post('/admin/add', async (c) => {
+  if (!requireSourceAdminOrSuper(c)) return c.text('Access denied', 403)
+  const me = c.get('me') as ResolvedUser
+  const body = await c.req.parseBody()
+  const handle = (body.handle as string)?.trim()
+  const sourceName = body.sourceName as string
+  if (!handle || !sourceName) {
+    return c.redirect('/admin?error=missing')
+  }
+  if (!canManageSource(me, sourceName)) {
+    return c.text('Cannot add admin for that source', 403)
+  }
+  await sourceAdminRepo.add(handle, sourceName)
+  return c.redirect('/admin')
+})
+
+app.post('/admin/remove', async (c) => {
+  if (!requireSourceAdminOrSuper(c)) return c.text('Access denied', 403)
+  const me = c.get('me') as ResolvedUser
+  const body = await c.req.parseBody()
+  const handle = body.handle as string
+  const sourceName = body.sourceName as string
+  if (!handle || !sourceName) {
+    return c.redirect('/admin?error=missing')
+  }
+  if (!canManageSource(me, sourceName)) {
+    return c.text('Cannot remove admin for that source', 403)
+  }
+  await sourceAdminRepo.remove(handle, sourceName)
+  return c.redirect('/admin')
+})
+
+app.get('/history/:key', async (c) => {
+  const me = c.get('me') as ResolvedUser
+  if (!requireSourceAdminOrSuper(c)) return c.text('Access denied', 403)
+  const releaseId = c.req.param('key')
+  const release = await releaseRepo.get(releaseId)
+  if (!release) return c.json({ error: 'not found' }, 404)
+  if (!me.isSuperAdmin && !me.sourceAdminSources.includes(release.source)) {
+    return c.text('Access denied', 403)
+  }
+  const xmls = await xmlRepo.find(releaseId)
+  const navMode = getNavMode(me)
+  return c.html(
+    <Layout2 title="XML History" navMode={navMode}>
       <table>
         <thead>
           <tr>
@@ -883,10 +1023,16 @@ app.get('/history/:key', async (c) => {
 })
 
 app.get('/release/:source/:key/:ref/:size?', async (c) => {
+  const me = c.get('me') as ResolvedUser
+  if (!requireSourceAdminOrSuper(c)) return c.text('Access denied', 403)
   const source = c.req.param('source')
   const key = c.req.param('key')!
   const ref = c.req.param('ref')
   const size = c.req.param('size')
+
+  if (!me.isSuperAdmin && !me.sourceAdminSources.includes(source)) {
+    return c.text('Access denied', 403)
+  }
 
   const asset = await assetRepo.get(source, key, ref)
   if (!asset) return c.json({ error: 'not found' }, 404)
@@ -912,9 +1058,15 @@ app.get('/release/:source/:key/:ref/:size?', async (c) => {
 })
 
 app.get('/xmls/:xmlUrl', async (c) => {
+  const me = c.get('me') as ResolvedUser
+  if (!requireSourceAdminOrSuper(c)) return c.text('Access denied', 403)
   const xmlUrl = c.req.param('xmlUrl')
   const row = await xmlRepo.get(xmlUrl)
   if (!row) return c.json({ error: 'not found' }, 404)
+
+  if (!me.isSuperAdmin && !me.sourceAdminSources.includes(row.source)) {
+    return c.text('Access denied', 403)
+  }
 
   const source = sources.findByXmlUrl(xmlUrl)
 
@@ -963,21 +1115,42 @@ app.get('/xmls/:xmlUrl', async (c) => {
 })
 
 app.get('/releases/:key/json', async (c) => {
+  if (!requireSourceAdminOrSuper(c)) return c.text('Access denied', 403)
   const row = await releaseRepo.get(c.req.param('key'))
   if (!row) return c.json({ error: 'not found' }, 404)
+  const me = c.get('me') as ResolvedUser
+  if (!me.isSuperAdmin && !me.sourceAdminSources.includes(row.source)) {
+    return c.text('Access denied', 403)
+  }
   return c.json(row)
 })
 
 app.get('/releases/:key/error', async (c) => {
+  if (!requireSourceAdminOrSuper(c)) return c.text('Access denied', 403)
   const row = await releaseRepo.get(c.req.param('key'))
   if (!row) return c.json({ error: 'not found' }, 404)
+  const me = c.get('me') as ResolvedUser
+  if (!me.isSuperAdmin && !me.sourceAdminSources.includes(row.source)) {
+    return c.text('Access denied', 403)
+  }
   return c.text(row.lastPublishError)
 })
 
 app.get('/users', async (c) => {
-  const users = await userRepo.all()
+  const me = c.get('me') as ResolvedUser
+  if (!requireSourceAdminOrSuper(c)) {
+    return c.text('Access denied', 403)
+  }
+  const users = me.isSuperAdmin
+    ? await userRepo.all()
+    : await userRepo.byApiKeys(
+        me.sourceAdminSources
+          .map((name) => sources.findByName(name)?.ddexKey)
+          .filter((k): k is string => Boolean(k))
+      )
+  const navMode = getNavMode(me)
   return c.html(
-    <Layout2 title="users">
+    <Layout2 title="users" navMode={navMode}>
       <h1>Users</h1>
 
       <table>
@@ -1013,13 +1186,17 @@ app.get('/users', async (c) => {
 })
 
 app.post('/publish/:releaseId', async (c) => {
-  const me = await getAudiusUser(c)
+  const me = c.get('me') as ResolvedUser
+  if (!requireSourceAdminOrSuper(c)) return c.text('Access denied', 403)
   const releaseId = c.req.param('releaseId')
   const releaseRow = await releaseRepo.get(releaseId)
   const release = releaseRow
   const source = sources.findByName(releaseRow?.source || '')
   if (!releaseRow || !source || !release || !me) {
     return c.text('not found', 404)
+  }
+  if (!me.isSuperAdmin && !me.sourceAdminSources.includes(releaseRow.source)) {
+    return c.text('Access denied', 403)
   }
 
   const body = await c.req.parseBody()
@@ -1079,16 +1256,22 @@ function ReleaseBanner({ release }: { release: ReleaseRow }) {
 }
 
 app.get('/releases/:releaseId/publog', async (c) => {
+  const me = c.get('me') as ResolvedUser
+  if (!requireSourceAdminOrSuper(c)) return c.text('Access denied', 403)
   const release = await releaseRepo.get(c.req.param('releaseId'))
   if (!release) {
     return c.text('not found', 404)
+  }
+  if (!me.isSuperAdmin && !me.sourceAdminSources.includes(release.source)) {
+    return c.text('Access denied', 403)
   }
   const logs = await publogRepo.forRelease(c.req.param('releaseId'))
   if (parseBool(c.req.query('json'))) {
     return c.json(logs)
   }
+  const navMode = getNavMode(me)
   return c.html(
-    <Layout2 title="publog">
+    <Layout2 title="publog" navMode={navMode}>
       <ReleaseBanner release={release} />
       <h4>Publish Log</h4>
 
@@ -1129,9 +1312,12 @@ app.get('/releases/:releaseId/publog', async (c) => {
 })
 
 app.get('/report', (c) => {
+  if (!requireSuperAdmin(c)) return c.text('Super admin only', 403)
+  const me = c.get('me') as ResolvedUser
   const [start, end] = getPriorMonth()
+  const navMode = getNavMode(me)
   return c.html(
-    <Layout2 title="Sales Report">
+    <Layout2 title="Sales Report" navMode={navMode}>
       <h2>Sales Report</h2>
       <form method="post">
         <fieldset class="grid">
@@ -1176,6 +1362,7 @@ app.get('/report', (c) => {
 })
 
 app.post('/report', async (c) => {
+  if (!requireSuperAdmin(c)) return c.text('Super admin only', 403)
   const body = await c.req.formData()
   const sourceName = body.get('sourceName')?.toString()
   const start = body.get('start')?.toString()
@@ -1220,17 +1407,29 @@ export type JwtUser = {
     '1000x1000': string
   }
   apiKey: string
-
-  // added stuff
-  isAdmin: boolean
 }
 
-async function getAudiusUser(c: Context) {
+export type ResolvedUser = JwtUser & {
+  isSuperAdmin: boolean
+  sourceAdminSources: string[]
+  hasAnyAccess: boolean
+}
+
+async function getAudiusUser(c: Context): Promise<ResolvedUser | undefined> {
   const j = await getSignedCookie(c, COOKIE_SECRET!, COOKIE_NAME)
   if (!j) return
   const me = JSON.parse(j) as JwtUser
-  me.isAdmin = ADMIN_HANDLES.includes(me.handle.toLowerCase())
-  return me
+  const handleLower = me.handle?.toLowerCase() ?? ''
+  const isSuperAdmin = ADMIN_HANDLES.includes(handleLower)
+  const sourceAdminSources = await sourceAdminRepo.listSourcesForHandle(
+    handleLower
+  )
+  return {
+    ...me,
+    isSuperAdmin,
+    sourceAdminSources,
+    hasAnyAccess: isSuperAdmin || sourceAdminSources.length > 0,
+  }
 }
 
 async function audiusUserLink(id: string) {

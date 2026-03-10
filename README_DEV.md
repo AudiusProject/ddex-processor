@@ -15,6 +15,7 @@ Create `.env` file like:
 COOKIE_SECRET='abc'
 NODE_ENV = 'staging'
 DDEX_URL = 'https://localhost:8989'
+DDEX_API_KEY='your-staging-oauth-app-key'   # Create an app at staging.audius.co/settings for the ddex tool
 ADMIN_HANDLES = 'user1,user2'
 SKIP_SDK_PUBLISH='true'
 DB_URL='postgresql://postgres:example@127.0.0.1:40111/postgres'
@@ -23,7 +24,8 @@ DISCOVERY_DB=
 
 Create `data/sources.json` file like:
 
-> For oauth to work you'll need to create a [sdk app on staging](https://staging.audius.co/settings)
+> For **login** OAuth you need `DDEX_API_KEY` from a [ddex app on staging](https://staging.audius.co/settings).
+> Source `ddexKey`/`ddexSecret` in sources.json are for publishing/distribution, not for the web UI login.
 
 ```
 {
@@ -37,6 +39,8 @@ Create `data/sources.json` file like:
   ]
 }
 ```
+
+**Source admins:** Super admins can add Audius handles as admins of a given source via `/admin`. Those users will see a filtered view (Releases + Users for their source) on next login.
 
 Parse + print a local file:
 

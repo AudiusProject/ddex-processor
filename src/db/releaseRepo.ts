@@ -11,6 +11,7 @@ type FindReleaseParams = {
   pendingPublish?: boolean
   status?: string
   source?: string
+  sources?: string[]
   limit?: number
   offset?: number
   search?: string
@@ -65,6 +66,10 @@ export const releaseRepo = {
 
       ${ifdef(params.status, sql` and "status" = ${params.status!} `)}
       ${ifdef(params.source, sql` and "source" = ${params.source!} `)}
+      ${ifdef(
+        params.sources?.length,
+        sql` and "source" = any(${params.sources!}) `
+      )}
       ${ifdef(params.labelName, sql`and "labelName" = ${params.labelName!}`)}
       ${ifdef(params.genre, sql`and "genre" = ${params.genre!}`)}
 

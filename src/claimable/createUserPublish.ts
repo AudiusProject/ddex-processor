@@ -134,6 +134,6 @@ export async function publishToClaimableAccount(releaseId: string) {
 
     await publishRelease(source!, releaseRow, release)
   } catch (e) {
-    console.log('attempt', attempt, e)
+    console.log('publish error', e)
   }
 }

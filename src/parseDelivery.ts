@@ -5,7 +5,10 @@ import type { Element } from 'domhandler'
 import { mkdtemp, readFile, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { acknowledgeReleaseFailure, acknowledgeReleaseSuccess } from './acknowledgement'
+import {
+  acknowledgeReleaseFailure,
+  acknowledgeReleaseSuccess,
+} from './acknowledgement'
 import { releaseRepo, userRepo, xmlRepo } from './db'
 import { sources } from './sources'
 import { lowerAscii, omitEmpty } from './util'
@@ -227,7 +230,7 @@ export async function parseDdexXml(
       for (const release of releases) {
         await releaseRepo.upsert(source, xmlUrl, messageTimestamp, release)
       }
-      
+
       if (
         process.env.SEND_ACKNOWLEDGEMENTS === 'true' &&
         // Only send acknowledgement for SME
@@ -241,26 +244,27 @@ export async function parseDdexXml(
           releases,
         })
       }
-      
+
       return releases
     } else {
       console.log('unknown tagname', tagName)
     }
   } catch (error) {
     console.error('Failed to parse DDEX XML:', xmlUrl, error)
-    
+
     // Extract messageTimestamp if possible, otherwise use current time
     let messageTimestamp: string
     let messageId: string
     try {
       const $ = cheerio.load(xmlText, { xmlMode: true })
-      messageTimestamp = $('MessageCreatedDateTime').first().text() || new Date().toISOString()
+      messageTimestamp =
+        $('MessageCreatedDateTime').first().text() || new Date().toISOString()
       messageId = $('MessageId').text()
     } catch {
       messageTimestamp = new Date().toISOString()
       messageId = ''
     }
-    
+
     if (
       process.env.SEND_ACKNOWLEDGEMENTS === 'true' &&
       // Only send acknowledgement for SME
@@ -271,10 +275,10 @@ export async function parseDdexXml(
         xmlUrl,
         messageId,
         messageTimestamp,
-        error: error as Error
+        error: error as Error,
       })
     }
-    
+
     // Re-throw the error so it can be handled by the caller
     throw error
   }
@@ -283,7 +287,11 @@ export async function parseDdexXml(
 //
 // parseRelease
 //
-async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: boolean) {
+async function parseReleaseXml(
+  source: string,
+  $: cheerio.CheerioAPI,
+  isDdex40: boolean
+) {
   function toTexts($doc: CH) {
     return $doc.map((_, el) => $(el).text()).get()
   }
@@ -337,7 +345,10 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
               role: role,
             }
           })
-      } else if (tagName === 'ResourceContributor' || tagName === 'IndirectResourceContributor') {
+      } else if (
+        tagName === 'ResourceContributor' ||
+        tagName === 'IndirectResourceContributor'
+      ) {
         return $el
           .find('Contributor')
           .toArray()
@@ -396,13 +407,13 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
   // parse deals
   //
   const releaseDeals: Record<string, AudiusSupportedDeal[]> = {}
-  
+
   if (isDdex40) {
     // DDEX 4.0 structure: DealList > ReleaseDeal > Deal > DealTerms
     $('DealList > ReleaseDeal').each((_, el) => {
       const $el = $(el)
       const ref = $el.find('ReleaseReference').text()
-      
+
       $el.find('Deal > DealTerms').each((_, el) => {
         const $el = $(el)
 
@@ -410,11 +421,14 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
         const commercialModelType = cmt.attr('UserDefinedValue') || cmt.text()
         const usageTypes = toTexts($el.find('UseType'))
         const territoryCode = toTexts($el.find('TerritoryCode'))
-        const validityStartDate = $el.find('ValidityPeriod > StartDateTime').text()
+        const validityStartDate = $el
+          .find('ValidityPeriod > StartDateTime')
+          .text()
         const validityEndDate = $el.find('ValidityPeriod > EndDateTime').text()
 
         // only consider Worldwide
-        const isWorldwide = territoryCode.includes('Worldwide') || territoryCode.length > 100 // Many territories listed means worldwide
+        const isWorldwide =
+          territoryCode.includes('Worldwide') || territoryCode.length > 100 // Many territories listed means worldwide
         if (!isWorldwide) {
           return
         }
@@ -654,24 +668,36 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
 
     const recording: DDEXSoundRecording = {
       ref: $el.find('ResourceReference').text(),
-      isrc: isDdex40 
+      isrc: isDdex40
         ? $el.find('SoundRecordingEdition > ResourceId > ISRC').text()
         : $el.find('ISRC').text(),
 
       filePath: (() => {
         if (isDdex40) {
-          const fullUri = $el.find('SoundRecordingEdition > TechnicalDetails > DeliveryFile > File > URI').text()
+          const fullUri = $el
+            .find(
+              'SoundRecordingEdition > TechnicalDetails > DeliveryFile > File > URI'
+            )
+            .text()
           const lastSlashIndex = fullUri.lastIndexOf('/')
-          return lastSlashIndex !== -1 ? fullUri.substring(0, lastSlashIndex + 1) : ''
+          return lastSlashIndex !== -1
+            ? fullUri.substring(0, lastSlashIndex + 1)
+            : ''
         } else {
           return $el.find('FilePath:first').text()
         }
       })(),
       fileName: (() => {
         if (isDdex40) {
-          const fullUri = $el.find('SoundRecordingEdition > TechnicalDetails > DeliveryFile > File > URI').text()
+          const fullUri = $el
+            .find(
+              'SoundRecordingEdition > TechnicalDetails > DeliveryFile > File > URI'
+            )
+            .text()
           const lastSlashIndex = fullUri.lastIndexOf('/')
-          return lastSlashIndex !== -1 ? fullUri.substring(lastSlashIndex + 1) : fullUri
+          return lastSlashIndex !== -1
+            ? fullUri.substring(lastSlashIndex + 1)
+            : fullUri
         } else {
           return $el.find('FileName:first').text()
         }
@@ -693,16 +719,17 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
         : $el.find('LabelName').text(),
       duration: parseDuration($el.find('Duration').text()),
       previewStartSeconds: isDdex40
-        ? parseInt($el.find('ClipDetails > Timing > StartPoint:first').text()) / 1000
+        ? parseInt($el.find('ClipDetails > Timing > StartPoint:first').text()) /
+          1000
         : parseInt($el.find('PreviewDetails > StartPoint:first').text()),
       genre: genre,
       subGenre: subGenre,
       releaseDate: isDdex40
         ? $el.find('FirstPublicationDate').text()
         : $el
-          .find('OriginalResourceReleaseDate, ResourceReleaseDate')
-          .first()
-          .text(),
+            .find('OriginalResourceReleaseDate, ResourceReleaseDate')
+            .first()
+            .text(),
 
       copyrightLine: cline($el),
       producerCopyrightLine: pline($el),
@@ -729,10 +756,10 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
   function ddexResourceReducer(acc: Record<string, DDEXResource>, el: any) {
     const $el = $(el)
     const ref = $el.find('ResourceReference').text()
-    
+
     let filePath: string
     let fileName: string
-    
+
     if (isDdex40) {
       const fullUri = $el.find('TechnicalDetails > File > URI').text()
       const lastSlashIndex = fullUri.lastIndexOf('/')
@@ -747,7 +774,7 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
       filePath = $el.find('FilePath').text()
       fileName = $el.find('FileName').text()
     }
-    
+
     acc[ref] = { ref, filePath, fileName }
     return acc
   }
@@ -763,7 +790,7 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
   //
 
   const releaseSelector = isDdex40 ? 'ReleaseList > Release' : 'Release'
-  
+
   const work = $(releaseSelector)
     .toArray()
     .map(async (el) => {
@@ -776,12 +803,11 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
         : undefined
 
       const releaseDate = isDdex40
-        ? (validityStartDate ||
-          $el.find('OriginalReleaseDate').text())
-        : (validityStartDate ||
+        ? validityStartDate || $el.find('OriginalReleaseDate').text()
+        : validityStartDate ||
           $el.find('ReleaseDate').text() ||
           $el.find('GlobalOriginalReleaseDate').text() ||
-          $el.find('OriginalReleaseDate').text())
+          $el.find('OriginalReleaseDate').text()
 
       const [genre, subGenre] = parseGenres($el)
 
@@ -800,7 +826,7 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
           $el
         ),
         labelName: isDdex40
-          ? (partList[$el.find('ReleaseLabelReference').text()] || '')
+          ? partList[$el.find('ReleaseLabelReference').text()] || ''
           : $el.find('LabelName').text(),
         genre,
         subGenre,
@@ -834,29 +860,27 @@ async function parseReleaseXml(source: string, $: cheerio.CheerioAPI, isDdex40: 
       }
 
       // resolve resources
-      const resourceSelector = isDdex40 
+      const resourceSelector = isDdex40
         ? 'ResourceGroup ReleaseResourceReference, ResourceGroupContentItem > ReleaseResourceReference, LinkedReleaseResourceReference'
         : 'ReleaseResourceReferenceList > ReleaseResourceReference'
-      
-      $el
-        .find(resourceSelector)
-        .each((_, el) => {
-          const ref = $(el).text()
 
-          if (soundResources[ref]) {
-            release.soundRecordings.push(soundResources[ref])
-          } else if (imageResources[ref]) {
-            release.images.push(imageResources[ref])
-          } else if (textResources[ref]) {
-            console.log('ignoring text ref', ref)
-          } else {
-            // don't actually block on MissingRef...
-            // if it's an update, refs might not be included...
-            // if it's a create, this will simply become a publisher error when it tries to resolve a file...
-            //     release.problems.push(`MissingRef: ${ref}`)
-            console.log(`MissingRef: ${ref}`)
-          }
-        })
+      $el.find(resourceSelector).each((_, el) => {
+        const ref = $(el).text()
+
+        if (soundResources[ref]) {
+          release.soundRecordings.push(soundResources[ref])
+        } else if (imageResources[ref]) {
+          release.images.push(imageResources[ref])
+        } else if (textResources[ref]) {
+          console.log('ignoring text ref', ref)
+        } else {
+          // don't actually block on MissingRef...
+          // if it's an update, refs might not be included...
+          // if it's a create, this will simply become a publisher error when it tries to resolve a file...
+          //     release.problems.push(`MissingRef: ${ref}`)
+          console.log(`MissingRef: ${ref}`)
+        }
+      })
 
       // deal or no deal?
       if (!release.deals.length) {
@@ -921,7 +945,9 @@ export function parseReleaseIds($el: CH): DDEXReleaseIds {
   return omitEmpty({
     party_id: toText($el.find('ReleaseId > PartyId')),
     catalog_number: toText($el.find('ReleaseId > CatalogNumber')),
-    icpn: toText($el.find('ReleaseId > ICPN')) || toText($el.find('ReleaseId > UPC')),
+    icpn:
+      toText($el.find('ReleaseId > ICPN')) ||
+      toText($el.find('ReleaseId > UPC')),
     grid: toText($el.find('ReleaseId > GRid')),
     isan: toText($el.find('ReleaseId > ISAN')),
     isbn: toText($el.find('ReleaseId > ISBN')),
@@ -940,6 +966,54 @@ const genreMapping: Record<string, Genre> = {
   Dance: Genre.ELECTRONIC,
   'Indie Rock': Genre.ALTERNATIVE,
   Inspirational: Genre.AMBIENT,
+  'Hip Hop': Genre.HIP_HOP_RAP,
+  Rock: Genre.ROCK,
+  Metal: Genre.METAL,
+  Alternative: Genre.ALTERNATIVE,
+  'Hip-Hop/Rap': Genre.HIP_HOP_RAP,
+  Experimental: Genre.EXPERIMENTAL,
+  Punk: Genre.PUNK,
+  Folk: Genre.FOLK,
+  Pop: Genre.POP,
+  Ambient: Genre.AMBIENT,
+  Soundtrack: Genre.SOUNDTRACK,
+  World: Genre.WORLD,
+  Jazz: Genre.JAZZ,
+  Acoustic: Genre.ACOUSTIC,
+  Funk: Genre.FUNK,
+  'R&B/Soul': Genre.R_AND_B_SOUL,
+  Devotional: Genre.DEVOTIONAL,
+  Classical: Genre.CLASSICAL,
+  Reggae: Genre.REGGAE,
+  Podcasts: Genre.PODCASTS,
+  Country: Genre.COUNTRY,
+  'Spoken Word': Genre.SPOKEN_WORK,
+  Comedy: Genre.COMEDY,
+  Blues: Genre.BLUES,
+  Kids: Genre.KIDS,
+  Audiobooks: Genre.AUDIOBOOKS,
+  Latin: Genre.LATIN,
+  'Lo-Fi': Genre.LOFI,
+  Hyperpop: Genre.HYPERPOP,
+  Dancehall: Genre.DANCEHALL,
+  Techno: Genre.TECHNO,
+  Trap: Genre.TRAP,
+  House: Genre.HOUSE,
+  'Tech House': Genre.TECH_HOUSE,
+  'Deep House': Genre.DEEP_HOUSE,
+  Disco: Genre.DISCO,
+  Electro: Genre.ELECTRO,
+  Jungle: Genre.JUNGLE,
+  'Progressive House': Genre.PROGRESSIVE_HOUSE,
+  Hardstyle: Genre.HARDSTYLE,
+  'Glitch Hop': Genre.GLITCH_HOP,
+  Trance: Genre.TRANCE,
+  'Future Bass': Genre.FUTURE_BASS,
+  'Future House': Genre.FUTURE_HOUSE,
+  'Tropical House': Genre.TROPICAL_HOUSE,
+  Downtempo: Genre.DOWNTEMPO,
+  'Drum & Bass': Genre.DRUM_AND_BASS,
+  Dubstep: Genre.DUBSTEP,
 }
 
 function resolveAudiusGenre(

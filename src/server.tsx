@@ -1316,7 +1316,7 @@ app.get('/users', async (c) => {
   const maskLoginLink = (loginLink: string) => {
     const i = loginLink.indexOf('?')
     if (i === -1) return loginLink
-    const hiddenLen = loginLink.length - i
+    const hiddenLen = Math.min(loginLink.length - i, 10)
     return loginLink.slice(0, i) + '•'.repeat(hiddenLen)
   }
   const getEntropy = (stored: string) => {
@@ -1332,13 +1332,16 @@ app.get('/users', async (c) => {
   }
 
   const loginLinkCellCss = `
+    td.login-link-td { width: 400px; max-width: 400px; }
     .login-link-cell {
-      display: flex; align-items: center; gap: 0.5rem; min-width: 220px;
-      min-height: 28px;
+      display: flex; align-items: center; gap: 0.5rem;
+      width: 100%; min-height: 28px; box-sizing: border-box;
     }
     .login-link-cell .login-display {
       font-family: var(--pico-font-family-mono, monospace);
-      min-width: 3ch; line-height: 28px;
+      min-width: 0; flex: 1 1 auto; display: block;
+      line-height: 28px; overflow-x: auto; overflow-y: hidden;
+      white-space: nowrap;
     }
     .login-link-cell .icon-btn {
       display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
@@ -1361,7 +1364,7 @@ app.get('/users', async (c) => {
 function maskedLoginDisplay(loginUrl) {
   var i = loginUrl.indexOf('?');
   if (i === -1) return loginUrl;
-  var hiddenLen = loginUrl.length - i;
+  var hiddenLen = Math.min(loginUrl.length - i, 10);
   return loginUrl.slice(0, i) + '•'.repeat(hiddenLen);
 }
 document.querySelectorAll('.login-link-cell').forEach(function(cell) {
@@ -1443,7 +1446,7 @@ document.querySelectorAll('.login-link-cell').forEach(function(cell) {
                   {sources.findByApiKey(user.apiKey)?.name}
                 </b>
               </td>
-              <td>
+              <td class="login-link-td">
                 {loginLink ? (
                   <div class="login-link-cell" data-login={loginLink}>
                     <span class="login-display" data-masked>

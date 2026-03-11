@@ -65,7 +65,7 @@ export async function pollS3Source(
 
   let listingPrefix: string | null = await s3markerRepo.getListingPrefix(bucket)
 
-  // detect structure once if not yet set
+  // detect structure once if not yet set (only sets listing_prefix, preserves marker)
   if (listingPrefix === null) {
     const detect = await client.send(
       new ListObjectsCommand({
@@ -81,10 +81,13 @@ export async function pollS3Source(
       listingPrefix = ''
       console.log(`detected root structure for ${bucket}`)
     }
-    await s3markerRepo.upsert(bucket, '', listingPrefix)
+    // only set listing_prefix; preserve existing marker
+    const existingMarker = await s3markerRepo.get(bucket)
+    await s3markerRepo.upsert(bucket, existingMarker, listingPrefix)
   }
 
-  let nextMarker: string | undefined = ''
+  // load marker for incremental polling
+  let marker = await s3markerRepo.get(bucket)
   let pageCount = 0
 
   while (true) {
@@ -93,7 +96,7 @@ export async function pollS3Source(
         Bucket: bucket,
         Delimiter: '/',
         Prefix: listingPrefix || undefined,
-        Marker: nextMarker || undefined,
+        Marker: marker || undefined,
       })
     )
 
@@ -117,14 +120,18 @@ export async function pollS3Source(
       await processS3Contents(sourceName, client, bucket, contents)
     }
 
-    // paginate with NextMarker; do not persist across polls so we re-scan for new releases next time
-    if (!result.IsTruncated) break
-    nextMarker =
+    // persist marker for incremental polling; next poll continues from here
+    const nextMarker =
       result.NextMarker ||
       prefixes.at(-1) ||
       contents.at(-1)?.Key ||
       undefined
-    if (!nextMarker) break
+    if (nextMarker) {
+      // only update marker; preserve listing_prefix
+      await s3markerRepo.upsert(bucket, nextMarker)
+    }
+    if (!result.IsTruncated || !nextMarker) break
+    marker = nextMarker
   }
 }
 

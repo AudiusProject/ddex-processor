@@ -1149,9 +1149,15 @@ app.get('/users', async (c) => {
           .filter((k): k is string => Boolean(k))
       )
   const navMode = getNavMode(me)
+  const maskPassword = (pwd: string) =>
+    pwd.length > 5 ? '•'.repeat(pwd.length - 5) + pwd.slice(-5) : '•••'
+
   const passwordCellCss = `
-    .password-cell { display: flex; align-items: center; gap: 0.5rem; }
-    .password-cell .password-display { font-family: var(--pico-font-family-mono, monospace); min-width: 4ch; }
+    .password-cell { display: flex; align-items: center; gap: 0.5rem; min-width: 220px; }
+    .password-cell .password-display {
+      font-family: var(--pico-font-family-mono, monospace);
+      min-width: 3ch;
+    }
     .password-cell .icon-btn {
       display: inline-flex; align-items: center; justify-content: center;
       width: 28px; height: 28px; padding: 0; border: none;
@@ -1188,17 +1194,21 @@ document.querySelectorAll('.password-cell').forEach(function(cell) {
   });
 
   toggleBtn.addEventListener('click', function() {
-    var masked = display.getAttribute('data-masked');
+    var masked = display.hasAttribute('data-masked');
     if (masked) {
       display.textContent = pwd;
       display.removeAttribute('data-masked');
       eyeIcon.style.display = 'none';
-      eyeSlashIcon.style.display = '';
+      eyeSlashIcon.style.display = 'block';
+      toggleBtn.setAttribute('title', 'Hide password');
+      toggleBtn.setAttribute('aria-label', 'Hide password');
     } else {
-      display.textContent = '•••';
+      display.textContent = pwd.length > 5 ? '•'.repeat(pwd.length - 5) + pwd.slice(-5) : '•••';
       display.setAttribute('data-masked', '');
-      eyeIcon.style.display = '';
+      eyeIcon.style.display = 'block';
       eyeSlashIcon.style.display = 'none';
+      toggleBtn.setAttribute('title', 'Reveal password');
+      toggleBtn.setAttribute('aria-label', 'Reveal password');
     }
   });
 });
@@ -1236,19 +1246,23 @@ document.querySelectorAll('.password-cell').forEach(function(cell) {
               <td>
                 {user.password ? (
                   <div class="password-cell" data-password={user.password}>
-                    <span class="password-display" data-masked>•••</span>
+                    <span class="password-display" data-masked>
+                      {maskPassword(user.password)}
+                    </span>
                     <button type="button" class="icon-btn copy-password" title="Copy password" aria-label="Copy password">
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
                       </svg>
                     </button>
                     <button type="button" class="icon-btn toggle-password" title="Reveal password" aria-label="Reveal password">
-                      <svg class="icon-eye" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                      <svg class="icon-eye" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                       </svg>
-                      <svg class="icon-eye-slash" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="display:none">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228 3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88" />
+                      <svg class="icon-eye-slash" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+                        <path d="M10.585 10.587a2 2 0 0 0 2.829 2.828" />
+                        <path d="M16.681 16.673a8.717 8.717 0 0 1-4.681 1.327c-3.6 0-6.6-2-9-6c1.272-2.12 2.712-3.678 4.32-4.674m2.86-1.146a9.055 9.055 0 0 1 1.82-.18c3.6 0 6.6 2 9 6c-.666 1.11-1.379 2.067-2.138 2.87" />
+                        <path d="M3 3l18 18" />
                       </svg>
                     </button>
                   </div>
@@ -1256,7 +1270,11 @@ document.querySelectorAll('.password-cell').forEach(function(cell) {
                   <span class="text-muted">—</span>
                 )}
               </td>
-              <td>{user.createdAt}</td>
+              <td>
+                {user.createdAt
+                  ? formatDateToYYYYMMDD(new Date(user.createdAt))
+                  : '—'}
+              </td>
             </tr>
           ))}
         </tbody>

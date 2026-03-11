@@ -252,10 +252,45 @@ app.get('/releases', async (c) => {
   const rows = await releaseRepo.all(releaseParams)
 
   if (csvExport) {
-    const csv = stringify(rows, {
-      header: true,
-      columns: Object.keys(rows[0] || {}),
-    })
+    const includedCols = [
+      'source',
+      'key',
+      'ref',
+      'xmlUrl',
+      'messageTimestamp',
+      'status',
+      'entityType',
+      'entityId',
+      'blockHash',
+      'blockNumber',
+      'publishedAt',
+      'createdAt',
+      'updatedAt',
+      'releaseType',
+      'releaseDate',
+      'prependArtist',
+      'useDefaultDeal',
+      'genre',
+      'subGenre',
+      'labelName',
+      'title',
+      'subTitle',
+      'artists',
+      'contributors',
+      'indirectContributors',
+      'releaseIds',
+      'isMainRelease',
+      'audiusGenre',
+      'audiusUser',
+      'problems',
+      'soundRecordings',
+      'images',
+      'deals',
+      'copyrightLine',
+      'producerCopyrightLine',
+      'parentalWarningType',
+    ]
+    const csv = stringify(rows, { header: true, columns: includedCols })
     c.header('Content-Type', 'text/csv')
     return c.body(csv)
   }
@@ -282,6 +317,7 @@ app.get('/releases', async (c) => {
   }
 
   const navMode = getNavMode(me)
+  const showAllColumns = me.isSuperAdmin
 
   return c.html(
     <Layout2 title={querySearch || 'Releases'} navMode={navMode}>
@@ -366,26 +402,32 @@ app.get('/releases', async (c) => {
       <table>
         <thead>
           <tr>
-            <th></th>
+            {showAllColumns && <th></th>}
             <th>Artist</th>
             <th>Genre</th>
             <th>Release</th>
-            <th>Clear</th>
-            <th></th>
-            <th></th>
+            {showAllColumns && (
+              <>
+                <th>Clear</th>
+                <th></th>
+              </>
+            )}
+            <th>Audius Track</th>
             <th>debug</th>
           </tr>
         </thead>
         <tbody style="line-height: 1; white-space: nowrap;">
           {rows.map((row) => (
             <tr>
-              <td style="min-width: 80px; width: 120px;">
-                <img
-                  src={`/release/${row.source}/${row.key}/${row.images[0]?.ref}/200`}
-                  width="80"
-                  height="80"
-                />
-              </td>
+              {showAllColumns && (
+                <td style="min-width: 80px; width: 120px;">
+                  <img
+                    src={`/release/${row.source}/${row.key}/${row.images[0]?.ref}/200`}
+                    width="80"
+                    height="80"
+                  />
+                </td>
+              )}
               <td class="truncate">
                 <a
                   href={`/releases/${encodeURIComponent(row.key)}`}
@@ -419,29 +461,33 @@ app.get('/releases', async (c) => {
                 <br />
                 <small>{row.releaseDate}</small>
               </td>
-              <td>
-                {row.numCleared != undefined && (
-                  <div>
-                    <b
-                      title={`${row.numCleared} cleared
+              {showAllColumns && (
+                <td>
+                  {row.numCleared != undefined && (
+                    <div>
+                      <b
+                        title={`${row.numCleared} cleared
 ${row.numNotCleared} not cleared
 ${row.soundRecordings.length} tracks`}
-                    >
-                      {(
-                        (row.numCleared / (row.soundRecordings.length || 1)) *
-                        100
-                      ).toFixed() + '%'}
-                    </b>
-                  </div>
-                )}
-              </td>
-              <td>
-                {row.publishErrorCount > 0 && (
-                  <a href={`/releases/${encodeURIComponent(row.key)}/error`}>
-                    {row.publishErrorCount}
-                  </a>
-                )}
-              </td>
+                      >
+                        {(
+                          (row.numCleared / (row.soundRecordings.length || 1)) *
+                          100
+                        ).toFixed() + '%'}
+                      </b>
+                    </div>
+                  )}
+                </td>
+              )}
+              {showAllColumns && (
+                <td>
+                  {row.publishErrorCount > 0 && (
+                    <a href={`/releases/${encodeURIComponent(row.key)}/error`}>
+                      {row.publishErrorCount}
+                    </a>
+                  )}
+                </td>
+              )}
               <td>
                 {row.entityType == 'track' && (
                   <a href={`${API_HOST}/v1/full/tracks/${row.entityId}`}>
@@ -984,10 +1030,20 @@ app.get('/admin', async (c) => {
     ? allAdmins
     : allAdmins.filter((a) => managedSources.includes(a.source_name))
   const navMode = getNavMode(me)
+  const errorParam = c.req.query('error')
+  const errorMsg =
+    errorParam === 'missing'
+      ? 'Handle and source are required.'
+      : errorParam === 'self-remove'
+        ? 'You cannot remove yourself as admin.'
+        : null
 
   return c.html(
     <Layout2 title="Source Admins" navMode={navMode}>
       <h1>Source Admins</h1>
+      {errorMsg && (
+        <p style="color: var(--n-error); margin-bottom: 1rem;">{errorMsg}</p>
+      )}
       <p>
         Add an Audius handle to grant them admin access to a source. They will
         see it on next login.
@@ -1028,23 +1084,24 @@ app.get('/admin', async (c) => {
               <td>{a.handle}</td>
               <td>{a.source_name}</td>
               <td>
-                {canManageSource(me, a.source_name) && (
-                  <form
-                    method="post"
-                    action="/admin/remove"
-                    style={{ display: 'inline' }}
-                  >
-                    <input type="hidden" name="handle" value={a.handle} />
-                    <input
-                      type="hidden"
-                      name="sourceName"
-                      value={a.source_name}
-                    />
-                    <button type="submit" class="btn-primary">
-                      Remove
-                    </button>
-                  </form>
-                )}
+                {canManageSource(me, a.source_name) &&
+                  a.handle?.toLowerCase() !== me.handle?.toLowerCase() && (
+                    <form
+                      method="post"
+                      action="/admin/remove"
+                      style={{ display: 'inline' }}
+                    >
+                      <input type="hidden" name="handle" value={a.handle} />
+                      <input
+                        type="hidden"
+                        name="sourceName"
+                        value={a.source_name}
+                      />
+                      <button type="submit" class="btn-primary">
+                        Remove
+                      </button>
+                    </form>
+                  )}
               </td>
             </tr>
           ))}
@@ -1081,6 +1138,9 @@ app.post('/admin/remove', async (c) => {
   }
   if (!canManageSource(me, sourceName)) {
     return c.text('Cannot remove admin for that source', 403)
+  }
+  if (handle?.toLowerCase() === me.handle?.toLowerCase()) {
+    return c.redirect('/admin?error=self-remove')
   }
   await sourceAdminRepo.remove(handle, sourceName)
   return c.redirect('/admin')
@@ -1337,6 +1397,7 @@ document.querySelectorAll('.password-cell').forEach(function(cell) {
             <th>id</th>
             <th>handle</th>
             <th>name</th>
+            <th>email</th>
             <th>api key</th>
             <th>password</th>
             <th>created</th>
@@ -1348,6 +1409,9 @@ document.querySelectorAll('.password-cell').forEach(function(cell) {
               <td>{user.id}</td>
               <td>{user.handle}</td>
               <td>{user.name}</td>
+              <td>
+                {user.password ? `ddex-support+${user.handle}@audius.co` : '—'}
+              </td>
               <td>
                 <b title={user.apiKey}>
                   {sources.findByApiKey(user.apiKey)?.name}

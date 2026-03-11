@@ -32,6 +32,7 @@ export const getHedgehog = () => {
 
   const setAuthFn: SetAuthFn = async (args) => {
     args.email = args.username
+    args.skipOtp = true
     const res = await fetch(`${identityHost}/authentication`, {
       headers: {
         'Content-Type': 'application/json',

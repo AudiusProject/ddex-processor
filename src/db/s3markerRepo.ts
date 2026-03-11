@@ -8,7 +8,23 @@ export const s3markerRepo = {
     return markerRow?.marker || ''
   },
 
-  async upsert(bucket: string, marker: string) {
-    await sql`insert into "s3markers" values (${bucket}, ${marker}) on conflict (bucket) do update set marker = ${marker}`
+  async getListingPrefix(bucket: string): Promise<string | null> {
+    const [row] =
+      await sql`select listing_prefix from "s3markers" where bucket = ${bucket}`
+    return row?.listing_prefix ?? null
+  },
+
+  async upsert(bucket: string, marker: string, listingPrefix?: string | null) {
+    await sql`
+      insert into "s3markers" (bucket, marker, listing_prefix)
+      values (${bucket}, ${marker}, ${listingPrefix ?? null})
+      on conflict (bucket) do update set
+        marker = ${marker},
+        listing_prefix = coalesce(${listingPrefix ?? null}, s3markers.listing_prefix)
+    `
+  },
+
+  async reset(bucket: string) {
+    await sql`delete from "s3markers" where bucket = ${bucket}`
   },
 }

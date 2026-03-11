@@ -71,9 +71,12 @@ const steps = [
   sql`
   create table if not exists "s3markers" (
     "bucket" text primary key,
-    "marker" text not null
+    "marker" text not null,
+    "listing_prefix" text
   );
   `,
+
+  sql`ALTER TABLE "s3markers" ADD COLUMN IF NOT EXISTS "listing_prefix" text;`,
 
   sql`
   create table if not exists "lsrLog" (

@@ -30,12 +30,17 @@ export function dialS3(sourceConfig: BucketConfig) {
   return s3clients[awsKey]
 }
 
-export async function pollS3(reset?: boolean) {
-  for (const sourceConfig of sources.all()) {
-    if (!sourceConfig.awsBucket) {
-      console.log(`skipping non-s3 source: ${sourceConfig.name}`)
-      continue
-    }
+export async function pollS3(reset?: boolean, options?: { bucket?: string }) {
+  const configs = sources.all().filter((s) => s.awsBucket)
+  const toPoll = options?.bucket
+    ? configs.filter((s) => s.awsBucket === options.bucket)
+    : configs
+  if (options?.bucket && toPoll.length === 0) {
+    console.log(`no source found for bucket ${options.bucket}`)
+    return
+  }
+  for (const sourceConfig of toPoll) {
+    if (!sourceConfig.awsBucket) continue
     await pollS3Source(sourceConfig, reset)
   }
 }
@@ -44,78 +49,82 @@ export async function pollS3Source(
   sourceConfig: SourceConfig,
   reset?: boolean
 ) {
+  if (!sourceConfig.awsBucket) {
+    console.log(`skipping non-s3 source: ${sourceConfig.name}`)
+    return
+  }
+
+  const client = dialS3(sourceConfig)
+  const bucket = sourceConfig.awsBucket
+  const sourceName = sourceConfig.name
+
+  // reset clears marker and listing_prefix so we re-detect structure
+  if (reset) {
+    await s3markerRepo.reset(bucket)
+  }
+
+  let listingPrefix: string | null = await s3markerRepo.getListingPrefix(bucket)
+
+  // detect structure once if not yet set
+  if (listingPrefix === null) {
+    const detect = await client.send(
+      new ListObjectsCommand({
+        Bucket: bucket,
+        Delimiter: '/',
+      })
+    )
+    const topPrefixes = (detect.CommonPrefixes?.map((p) => p.Prefix).filter(Boolean) || []) as string[]
+    if (topPrefixes.length === 1 && topPrefixes[0] === 'releases/') {
+      listingPrefix = 'releases/'
+      console.log(`detected releases/ structure for ${bucket}`)
+    } else {
+      listingPrefix = ''
+      console.log(`detected root structure for ${bucket}`)
+    }
+    await s3markerRepo.upsert(bucket, '', listingPrefix)
+  }
+
+  let nextMarker: string | undefined = ''
+  let pageCount = 0
+
   while (true) {
-    if (!sourceConfig.awsBucket) {
-      console.log(`skipping non-s3 source: ${sourceConfig.name}`)
-      continue
-    }
-
-    const client = dialS3(sourceConfig)
-    const bucket = sourceConfig.awsBucket
-    const sourceName = sourceConfig.name
-
-    let Marker = ''
-
-    // load prior marker
-    if (!reset) {
-      Marker = await s3markerRepo.get(bucket)
-    }
-
-    // list top level prefixes after marker
     const result = await client.send(
       new ListObjectsCommand({
         Bucket: bucket,
         Delimiter: '/',
-        Marker,
+        Prefix: listingPrefix || undefined,
+        Marker: nextMarker || undefined,
       })
     )
-    
-    const prefixes = result.CommonPrefixes?.map((p) => p.Prefix).filter(
-      Boolean
-    ) as string[]
-    
+
+    const prefixes = (result.CommonPrefixes?.map((p) => p.Prefix).filter(Boolean) || []) as string[]
+    const contents = result.Contents || []
+
+    pageCount++
     console.log(
-      `polling s3 ${bucket} from ${Marker} got ${prefixes?.length || 0} prefixes and ${result.Contents?.length || 0} files`
+      `polling s3 ${bucket} prefix=${listingPrefix || '(root)'} page=${pageCount} got ${prefixes.length} prefixes and ${contents.length} files`
     )
 
-    // Handle case where there are common prefixes (folder structure)
-    if (prefixes && prefixes.length > 0) {
+    if (prefixes.length > 0) {
       const batchSize = 20
       for (let i = 0; i < prefixes.length; i += batchSize) {
         const batch = prefixes.slice(i, i + batchSize)
         await Promise.all(
-          batch.map(async (prefix) => {
-            await scanS3Prefix(sourceName, client, bucket, prefix)
-          })
+          batch.map((prefix) => scanS3Prefix(sourceName, client, bucket, prefix))
         )
       }
-      
-      // save marker for prefixes
-      Marker = prefixes.at(-1)!
-      console.log('update marker', { bucket, Marker })
-      await s3markerRepo.upsert(bucket, Marker)
+    } else if (contents.length > 0) {
+      await processS3Contents(sourceName, client, bucket, contents)
     }
-    // Handle case where files are at root level (no prefixes)
-    else if (result.Contents && result.Contents.length > 0) {
-      // Process files directly at root level using the same logic
-      await processS3Contents(sourceName, client, bucket, result.Contents)
 
-      // Update marker to last processed file key
-      const lastKey = result.Contents.at(-1)?.Key
-      if (lastKey) {
-        console.log('update marker', { bucket, Marker: lastKey })
-        await s3markerRepo.upsert(bucket, lastKey)
-      }
-
-      // Break if not truncated (no more files)
-      if (!result.IsTruncated) {
-        break
-      }
-    }
-    else {
-      // No prefixes and no contents, we're done
-      break
-    }
+    // paginate with NextMarker; do not persist across polls so we re-scan for new releases next time
+    if (!result.IsTruncated) break
+    nextMarker =
+      result.NextMarker ||
+      prefixes.at(-1) ||
+      contents.at(-1)?.Key ||
+      undefined
+    if (!nextMarker) break
   }
 }
 

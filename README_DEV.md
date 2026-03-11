@@ -66,6 +66,20 @@ If you have setup an S3 source in `data/sources.json`, you can run the worker to
 npm run worker
 ```
 
+### Re-parse a specific bucket (new releases only)
+
+To re-scan one bucket and pick up only new releases (e.g. under `releases/`):
+
+```bash
+# Reset that bucket's cursor and re-detect its structure, then poll
+npx tsx cli.ts poll-s3 --reset --bucket ddex-prod-onchainmusic-raw
+```
+
+- `--reset` clears the bucket's stored state so structure is re-detected (root vs `releases/`)
+- `--bucket <name>` limits polling to that bucket only
+
+The poller detects each bucket's structure once: if the top level has a single `releases/` prefix, it uses that; otherwise it lists at root. Every poll does a full scan (no persistent marker), so new releases are always found.
+
 If you want to delete the state and re-crawl from the start
 
 ```bash

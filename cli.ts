@@ -119,9 +119,10 @@ program
 program
   .command('poll-s3')
   .description('Pull down assets from S3 and process')
-  .option('--reset', 'reset cursor, start from beginning')
+  .option('--reset', 'reset cursor and re-detect bucket structure')
+  .option('--bucket <name>', 'only poll this bucket (e.g. ddex-prod-onchainmusic-raw)')
   .action(async (opts) => {
-    await pollS3(opts.reset)
+    await pollS3(opts.reset, opts.bucket ? { bucket: opts.bucket } : undefined)
   })
 
 program

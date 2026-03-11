@@ -216,6 +216,12 @@ export async function updateTrack(
   return result
 }
 
+function toValidDate(val: string | undefined): Date | undefined {
+  if (!val) return undefined
+  const d = new Date(val)
+  return isNaN(d.getTime()) ? undefined : d
+}
+
 export function prepareTrackMetadatas(
   source: SourceConfig,
   releaseRow: ReleaseRow,
@@ -230,8 +236,8 @@ export function prepareTrackMetadatas(
       }
 
       const releaseDate =
-        new Date(sound.releaseDate) ||
-        new Date(release.releaseDate) ||
+        toValidDate(sound.releaseDate) ||
+        toValidDate(release.releaseDate) ||
         new Date()
 
       // use sound copyright, fallback to release copyright
@@ -414,10 +420,7 @@ export function prepareAlbumMetadata(
   releaseRow: ReleaseRow,
   release: DDEXRelease
 ) {
-  let releaseDate: Date | undefined
-  if (release.releaseDate) {
-    releaseDate = new Date(release.releaseDate)
-  }
+  const releaseDate = toValidDate(release.releaseDate)
   let title = [release.title, release.subTitle].filter(Boolean).join(' ')
   if (releaseRow.prependArtist) {
     title = release.artists[0].name + ' - ' + title

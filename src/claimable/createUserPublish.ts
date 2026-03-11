@@ -70,7 +70,6 @@ export async function publishToClaimableAccount(releaseId: string) {
           handle: handle,
           name: artistName,
           wallet: identityResult.getAddressString(),
-          bio: `${release.labelName}.`,
         },
       })
 

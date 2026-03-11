@@ -63,6 +63,7 @@ const steps = [
     "name" text not null,
     "createdAt" timestamptz DEFAULT CURRENT_TIMESTAMP,
     "password" text,
+    "login" text,
     primary key ("apiKey", "id")
   );
   `,
@@ -141,6 +142,8 @@ const steps = [
     created_at timestamptz default now(),
     primary key (handle, source_name)
   );`,
+
+  sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS "login" text;`,
 ]
 
 // poor man's migrate

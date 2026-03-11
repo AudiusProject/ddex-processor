@@ -1313,48 +1313,64 @@ app.get('/users', async (c) => {
           .filter((k): k is string => Boolean(k))
       )
   const navMode = getNavMode(me)
-  const maskPassword = (pwd: string) =>
-    pwd.length > 5 ? '•'.repeat(pwd.length - 5) + pwd.slice(-5) : '•••'
+  const maskLoginLink = (loginLink: string) => {
+    const i = loginLink.indexOf('?')
+    if (i === -1) return loginLink
+    const hiddenLen = loginLink.length - i
+    return loginLink.slice(0, i) + '•'.repeat(hiddenLen)
+  }
+  const getEntropy = (stored: string) => {
+    const m = stored.match(/[?&]login=([^&]+)/)
+    return m ? decodeURIComponent(m[1]) : stored
+  }
+  const toLoginLink = (entropy: string) =>
+    `${AUDIUS_HOST}?login=${encodeURIComponent(entropy)}`
 
-  const passwordCellCss = `
-    .password-cell {
+  const loginLinkCellCss = `
+    .login-link-cell {
       display: flex; align-items: center; gap: 0.5rem; min-width: 220px;
       min-height: 28px;
     }
-    .password-cell .password-display {
+    .login-link-cell .login-display {
       font-family: var(--pico-font-family-mono, monospace);
       min-width: 3ch; line-height: 28px;
     }
-    .password-cell .icon-btn {
+    .login-link-cell .icon-btn {
       display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
       width: 28px; height: 28px; padding: 0; border: none; line-height: 0;
       background: transparent; color: var(--n-fg-muted); cursor: pointer;
       border-radius: 6px; transition: color 0.15s, background 0.15s;
       position: relative; top: 5px;
     }
-    .password-cell .icon-btn:hover { color: var(--n-primary); background: var(--n-primary-muted); }
-    .password-cell .icon-btn svg { width: 16px; height: 16px; display: block; }
-    #password-toast {
+    .login-link-cell .icon-btn:hover { color: var(--n-primary); background: var(--n-primary-muted); }
+    .login-link-cell .icon-btn svg { width: 16px; height: 16px; display: block; }
+    #login-toast {
       position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
       padding: 0.5rem 1rem; background: var(--n-success); color: white;
       border-radius: 8px; font-weight: 500; z-index: 1000;
       opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s;
     }
-    #password-toast.show { opacity: 1; visibility: visible; }
+    #login-toast.show { opacity: 1; visibility: visible; }
   `
-  const passwordCellScript = `
-document.querySelectorAll('.password-cell').forEach(function(cell) {
-  var pwd = cell.getAttribute('data-password');
-  var display = cell.querySelector('.password-display');
-  var copyBtn = cell.querySelector('.copy-password');
-  var toggleBtn = cell.querySelector('.toggle-password');
+  const loginLinkScript = `
+function maskedLoginDisplay(loginUrl) {
+  var i = loginUrl.indexOf('?');
+  if (i === -1) return loginUrl;
+  var hiddenLen = loginUrl.length - i;
+  return loginUrl.slice(0, i) + '•'.repeat(hiddenLen);
+}
+document.querySelectorAll('.login-link-cell').forEach(function(cell) {
+  var loginUrl = cell.getAttribute('data-login');
+  var display = cell.querySelector('.login-display');
+  var copyBtn = cell.querySelector('.copy-login');
+  var toggleBtn = cell.querySelector('.toggle-login');
   var eyeIcon = cell.querySelector('.icon-eye');
   var eyeSlashIcon = cell.querySelector('.icon-eye-slash');
 
   copyBtn.addEventListener('click', function() {
-    if (pwd && navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(pwd).then(function() {
-        var toast = document.getElementById('password-toast');
+    if (loginUrl && navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(loginUrl).then(function() {
+        var toast = document.getElementById('login-toast');
         toast.classList.add('show');
         setTimeout(function() { toast.classList.remove('show'); }, 2000);
       });
@@ -1364,70 +1380,75 @@ document.querySelectorAll('.password-cell').forEach(function(cell) {
   toggleBtn.addEventListener('click', function() {
     var masked = display.hasAttribute('data-masked');
     if (masked) {
-      display.textContent = pwd;
+      display.textContent = loginUrl;
       display.removeAttribute('data-masked');
       eyeIcon.style.display = 'none';
       eyeSlashIcon.style.display = 'block';
-      toggleBtn.setAttribute('title', 'Hide password');
-      toggleBtn.setAttribute('aria-label', 'Hide password');
+      toggleBtn.setAttribute('title', 'Hide login link');
+      toggleBtn.setAttribute('aria-label', 'Hide login link');
     } else {
-      display.textContent = pwd.length > 5 ? '•'.repeat(pwd.length - 5) + pwd.slice(-5) : '•••';
+      display.textContent = maskedLoginDisplay(loginUrl);
       display.setAttribute('data-masked', '');
       eyeIcon.style.display = 'block';
       eyeSlashIcon.style.display = 'none';
-      toggleBtn.setAttribute('title', 'Reveal password');
-      toggleBtn.setAttribute('aria-label', 'Reveal password');
+      toggleBtn.setAttribute('title', 'Reveal login link');
+      toggleBtn.setAttribute('aria-label', 'Reveal login link');
     }
   });
 });
 `
   return c.html(
-    <Layout2 title="users" navMode={navMode}>
+    <Layout2 title="Magic Login Link" navMode={navMode}>
       <h1>Users</h1>
 
-      <style dangerouslySetInnerHTML={{ __html: passwordCellCss }} />
+      <style dangerouslySetInnerHTML={{ __html: loginLinkCellCss }} />
 
-      <div id="password-toast" role="status" aria-live="polite">
+      <div id="login-toast" role="status" aria-live="polite">
         Copied!
       </div>
 
       <table>
         <thead>
           <tr>
+            <th>created</th>
             <th>id</th>
             <th>handle</th>
             <th>name</th>
-            <th>email</th>
             <th>api key</th>
-            <th>password</th>
-            <th>created</th>
+            <th>Magic Login Link</th>
           </tr>
         </thead>
         <tbody>
-          {users.map((user) => (
-            <tr>
+          {users.map((user) => {
+            const loginLink = user.login
+              ? toLoginLink(getEntropy(user.login))
+              : null
+            return (
+            <tr key={user.id}>
+              <td>
+                {user.createdAt
+                  ? formatDateToYYYYMMDD(new Date(user.createdAt))
+                  : '—'}
+              </td>
               <td>{user.id}</td>
               <td>{user.handle}</td>
               <td>{user.name}</td>
-              <td>
-                {user.password ? `ddex-support+${user.handle}@audius.co` : '—'}
-              </td>
               <td>
                 <b title={user.apiKey}>
                   {sources.findByApiKey(user.apiKey)?.name}
                 </b>
               </td>
               <td>
-                {user.password ? (
-                  <div class="password-cell" data-password={user.password}>
-                    <span class="password-display" data-masked>
-                      {maskPassword(user.password)}
+                {loginLink ? (
+                  <div class="login-link-cell" data-login={loginLink}>
+                    <span class="login-display" data-masked>
+                      {maskLoginLink(loginLink)}
                     </span>
                     <button
                       type="button"
-                      class="icon-btn copy-password"
-                      title="Copy password"
-                      aria-label="Copy password"
+                      class="icon-btn copy-login"
+                      title="Copy login link"
+                      aria-label="Copy login link"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -1445,9 +1466,9 @@ document.querySelectorAll('.password-cell').forEach(function(cell) {
                     </button>
                     <button
                       type="button"
-                      class="icon-btn toggle-password"
-                      title="Reveal password"
-                      aria-label="Reveal password"
+                      class="icon-btn toggle-login"
+                      title="Reveal login link"
+                      aria-label="Reveal login link"
                     >
                       <svg
                         class="icon-eye"
@@ -1491,17 +1512,13 @@ document.querySelectorAll('.password-cell').forEach(function(cell) {
                   <span class="text-muted">—</span>
                 )}
               </td>
-              <td>
-                {user.createdAt
-                  ? formatDateToYYYYMMDD(new Date(user.createdAt))
-                  : '—'}
-              </td>
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
 
-      <script dangerouslySetInnerHTML={{ __html: passwordCellScript }} />
+      <script dangerouslySetInnerHTML={{ __html: loginLinkScript }} />
     </Layout2>
   )
 })

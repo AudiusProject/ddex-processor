@@ -21,6 +21,7 @@ export type UserRow = {
   name: string
   createdAt: Date
   password?: string
+  login?: string
 }
 
 export enum ReleaseProcessingStatus {

@@ -7,7 +7,7 @@ import { publishRelease } from '../publishRelease'
 import { readAssetWithCaching } from '../s3poller'
 import { sources } from '../sources'
 import { encodeId } from '../util'
-import { getHedgehog } from './hedgehog'
+import { generateRecoveryInfo, getHedgehog } from './hedgehog'
 
 export async function publishToClaimableAccount(releaseId: string) {
   const releaseRow = await releaseRepo.get(releaseId)
@@ -55,6 +55,8 @@ export async function publishToClaimableAccount(releaseId: string) {
         password,
       })
       console.log('identityResult', identityResult)
+
+      const { login } = await generateRecoveryInfo()
 
       const audiusWalletClient = createHedgehogWalletClient(getHedgehog())
       const userSdk = sdk({
@@ -117,7 +119,7 @@ export async function publishToClaimableAccount(releaseId: string) {
         apiKey: source.ddexKey,
         handle: handle,
         name: artistName,
-        password,
+        login,
         createdAt: new Date(),
       })
     }

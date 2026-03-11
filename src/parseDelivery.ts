@@ -894,7 +894,20 @@ async function parseReleaseXml(
 
       // deal or no deal?
       if (!release.deals.length) {
-        release.problems.push('NoDeal')
+        const sourceConfig = sources.findByName(source)
+        if (sourceConfig?.autoPublish) {
+          const defaultDeal: DealPayGated = {
+            audiusDealType: 'PayGated',
+            forStream: true,
+            forDownload: true,
+            priceUsd:
+              release.soundRecordings.length > 1 ? 5.0 : 1.0,
+            validityStartDate: new Date().toISOString(),
+          }
+          release.deals = [defaultDeal]
+        } else {
+          release.problems.push('NoDeal')
+        }
       }
 
       // inherit genre from sound recordings when release has none (Volume/ERN 382 style)

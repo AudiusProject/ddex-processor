@@ -144,6 +144,7 @@ const steps = [
   );`,
 
   sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS "login" text;`,
+  sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS "lookupKey" text;`,
 ]
 
 // poor man's migrate

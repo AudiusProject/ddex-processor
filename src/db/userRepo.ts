@@ -22,7 +22,8 @@ export const userRepo = {
       insert into users ${sql(user)}
       on conflict ("id", "apiKey") do update set
       "name" = excluded."name",
-      "login" = coalesce(excluded."login", users."login")
+      "login" = coalesce(excluded."login", users."login"),
+      "lookupKey" = coalesce(excluded."lookupKey", users."lookupKey")
     `
   },
 

@@ -1323,8 +1323,13 @@ app.get('/users', async (c) => {
     const m = stored.match(/[?&]login=([^&]+)/)
     return m ? decodeURIComponent(m[1]) : stored
   }
-  const toLoginLink = (entropy: string) =>
-    `${AUDIUS_HOST}?login=${encodeURIComponent(entropy)}`
+  const toLoginLink = (entropy: string, lookupKey?: string) => {
+    const params = new URLSearchParams()
+    params.set('login', entropy)
+    if (lookupKey) params.set('lookupKey', lookupKey)
+    params.set('mode', 'emailpassword')
+    return `${AUDIUS_HOST}?${params.toString()}`
+  }
 
   const loginLinkCellCss = `
     .login-link-cell {
@@ -1421,7 +1426,7 @@ document.querySelectorAll('.login-link-cell').forEach(function(cell) {
         <tbody>
           {users.map((user) => {
             const loginLink = user.login
-              ? toLoginLink(getEntropy(user.login))
+              ? toLoginLink(getEntropy(user.login), user.lookupKey ?? undefined)
               : null
             return (
             <tr key={user.id}>

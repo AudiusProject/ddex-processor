@@ -12,13 +12,13 @@ import { logger } from 'hono/logger'
 import { prettyJSON } from 'hono/pretty-json'
 import { publishToClaimableAccount } from './claimable/createUserPublish'
 import {
-    ReleaseProcessingStatus,
-    ReleaseRow,
-    assetRepo,
-    isClearedRepo,
-    releaseRepo,
-    userRepo,
-    xmlRepo,
+  ReleaseProcessingStatus,
+  ReleaseRow,
+  assetRepo,
+  isClearedRepo,
+  releaseRepo,
+  userRepo,
+  xmlRepo,
 } from './db'
 import { sourceAdminRepo } from './db/sourceAdminRepo'
 import { DDEXContributor, DDEXRelease, parseDdexXml } from './parseDelivery'
@@ -75,7 +75,9 @@ app.use(async (c, next) => {
   await next()
 })
 
-function getNavMode(me: ResolvedUser | undefined): 'full' | 'source_admin' | 'none' {
+function getNavMode(
+  me: ResolvedUser | undefined
+): 'full' | 'source_admin' | 'none' {
   if (!me) return 'none'
   if (me.isSuperAdmin) return 'full'
   if (me.sourceAdminSources.length > 0) return 'source_admin'
@@ -104,14 +106,12 @@ app.get('/', async (c) => {
               Log out
             </a>
           </>
+        ) : DDEX_API_KEY ? (
+          <a class="btn-secondary" href="/auth/login">
+            Login
+          </a>
         ) : (
-          DDEX_API_KEY ? (
-            <a class="btn-secondary" href="/auth/login">
-              Login
-            </a>
-          ) : (
-            <mark>DDEX_API_KEY not configured. Set DDEX_API_KEY in env.</mark>
-          )
+          <mark>DDEX_API_KEY not configured. Set DDEX_API_KEY in env.</mark>
         )}
       </div>
     </Layout2>
@@ -164,7 +164,11 @@ app.get('/auth/redirect', async (c) => {
 
 app.use('*', async (c, next) => {
   const path = new URL(c.req.url).pathname
-  if (path === '/' || path.startsWith('/auth/') || path.startsWith('/static/')) {
+  if (
+    path === '/' ||
+    path.startsWith('/auth/') ||
+    path.startsWith('/static/')
+  ) {
     return next()
   }
   const me = c.get('me')
@@ -217,7 +221,11 @@ app.get('/releases', async (c) => {
   const allowedSources = me.isSuperAdmin
     ? sources.all().map((s) => s.name)
     : me.sourceAdminSources
-  if (!me.isSuperAdmin && querySource && !allowedSources.includes(querySource)) {
+  if (
+    !me.isSuperAdmin &&
+    querySource &&
+    !allowedSources.includes(querySource)
+  ) {
     querySource = allowedSources[0] ?? ''
   }
 
@@ -463,10 +471,7 @@ app.get('/releases/:key', async (c) => {
   const releaseId = c.req.param('key')
   const row = await releaseRepo.get(releaseId)
   if (!row) return c.json({ error: 'not found' }, 404)
-  if (
-    !me.isSuperAdmin &&
-    !me.sourceAdminSources.includes(row.source)
-  ) {
+  if (!me.isSuperAdmin && !me.sourceAdminSources.includes(row.source)) {
     return c.text('Access denied', 403)
   }
   if (c.req.query('json') != undefined) {
@@ -728,145 +733,229 @@ app.get('/releases/:key', async (c) => {
         </dialog>
 
         <div style={{ marginTop: '100px' }}></div>
-        <div class="playa-wrap" data-tracks={JSON.stringify(parsedRelease.soundRecordings.map((sr) => ({ url: `/release/${row.source}/${row.key}/${sr.ref}`, title: [sr.title, sr.subTitle].filter(Boolean).join(' '), artist: sr.artists[0]?.name || parsedRelease.artists[0]?.name || '' })))}>
+        <div
+          class="playa-wrap"
+          data-tracks={JSON.stringify(
+            parsedRelease.soundRecordings.map((sr) => ({
+              url: `/release/${row.source}/${row.key}/${sr.ref}`,
+              title: [sr.title, sr.subTitle].filter(Boolean).join(' '),
+              artist:
+                sr.artists[0]?.name || parsedRelease.artists[0]?.name || '',
+            }))
+          )}
+        >
           <audio id="playa" style="display:none"></audio>
           <div class="playa-player">
             <div class="playa-controls">
-              <button type="button" class="playa-btn playa-btn-prev" id="playa-prev" aria-label="Previous" disabled>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+              <button
+                type="button"
+                class="playa-btn playa-btn-prev"
+                id="playa-prev"
+                aria-label="Previous"
+                disabled
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M6 6h2v12H6zm3.5 6 8.5 6V6z" />
+                </svg>
               </button>
-              <button type="button" class="playa-btn playa-btn-play" id="playa-play" aria-label="Play">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" id="playa-icon-play"><path d="M8 5v14l11-7z"/></svg>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" id="playa-icon-pause" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+              <button
+                type="button"
+                class="playa-btn playa-btn-play"
+                id="playa-play"
+                aria-label="Play"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                  id="playa-icon-play"
+                >
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                  id="playa-icon-pause"
+                  style="display:none"
+                >
+                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                </svg>
               </button>
-              <button type="button" class="playa-btn playa-btn-next" id="playa-next" aria-label="Next" disabled>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+              <button
+                type="button"
+                class="playa-btn playa-btn-next"
+                id="playa-next"
+                aria-label="Next"
+                disabled
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                </svg>
               </button>
             </div>
             <div class="playa-track-info" id="playa-track-info">
-              <span class="playa-track-title" id="playa-track-title">—</span>
+              <span class="playa-track-title" id="playa-track-title">
+                —
+              </span>
               <span class="playa-track-artist" id="playa-track-artist"></span>
             </div>
             <div class="playa-progress-wrap">
-              <span class="playa-time playa-time-current" id="playa-current">0:00</span>
+              <span class="playa-time playa-time-current" id="playa-current">
+                0:00
+              </span>
               <div class="playa-progress-track">
-                <input type="range" class="playa-progress" id="playa-progress" min="0" max="100" value="0" step="0.1" aria-label="Progress" />
+                <input
+                  type="range"
+                  class="playa-progress"
+                  id="playa-progress"
+                  min="0"
+                  max="100"
+                  value="0"
+                  step="0.1"
+                  aria-label="Progress"
+                />
               </div>
-              <span class="playa-time playa-time-duration" id="playa-duration">0:00</span>
+              <span class="playa-time playa-time-duration" id="playa-duration">
+                0:00
+              </span>
             </div>
           </div>
         </div>
 
         {html`
           <script>
-            (function() {
-              var tracksData = JSON.parse(document.querySelector('.playa-wrap').getAttribute('data-tracks') || '[]');
-              var tracks = tracksData.map(function(t) { return typeof t === 'string' ? t : t.url; });
-              var playa = document.getElementById('playa');
-              var prevBtn = document.getElementById('playa-prev');
-              var playBtn = document.getElementById('playa-play');
-              var nextBtn = document.getElementById('playa-next');
-              var progressEl = document.getElementById('playa-progress');
-              var currentEl = document.getElementById('playa-current');
-              var durationEl = document.getElementById('playa-duration');
-              var iconPlay = document.getElementById('playa-icon-play');
-              var iconPause = document.getElementById('playa-icon-pause');
-              var trackTitleEl = document.getElementById('playa-track-title');
-              var trackArtistEl = document.getElementById('playa-track-artist');
-              var currentIndex = 0;
-              var isSeeking = false;
+            ;(function () {
+              var tracksData = JSON.parse(
+                document
+                  .querySelector('.playa-wrap')
+                  .getAttribute('data-tracks') || '[]'
+              )
+              var tracks = tracksData.map(function (t) {
+                return typeof t === 'string' ? t : t.url
+              })
+              var playa = document.getElementById('playa')
+              var prevBtn = document.getElementById('playa-prev')
+              var playBtn = document.getElementById('playa-play')
+              var nextBtn = document.getElementById('playa-next')
+              var progressEl = document.getElementById('playa-progress')
+              var currentEl = document.getElementById('playa-current')
+              var durationEl = document.getElementById('playa-duration')
+              var iconPlay = document.getElementById('playa-icon-play')
+              var iconPause = document.getElementById('playa-icon-pause')
+              var trackTitleEl = document.getElementById('playa-track-title')
+              var trackArtistEl = document.getElementById('playa-track-artist')
+              var currentIndex = 0
+              var isSeeking = false
 
               function formatTime(s) {
-                var m = Math.floor(s / 60);
-                var sec = Math.floor(s % 60);
-                return m + ':' + (sec < 10 ? '0' : '') + sec;
+                var m = Math.floor(s / 60)
+                var sec = Math.floor(s % 60)
+                return m + ':' + (sec < 10 ? '0' : '') + sec
               }
               function updateUI() {
-                var hasTracks = tracks.length > 0;
-                prevBtn.disabled = !hasTracks || currentIndex <= 0;
-                nextBtn.disabled = !hasTracks || currentIndex >= tracks.length - 1;
+                var hasTracks = tracks.length > 0
+                prevBtn.disabled = !hasTracks || currentIndex <= 0
+                nextBtn.disabled =
+                  !hasTracks || currentIndex >= tracks.length - 1
                 if (tracksData[currentIndex]) {
-                  var t = tracksData[currentIndex];
-                  trackTitleEl.textContent = (t.title || '—');
-                  trackArtistEl.textContent = (t.artist || '');
+                  var t = tracksData[currentIndex]
+                  trackTitleEl.textContent = t.title || '—'
+                  trackArtistEl.textContent = t.artist || ''
                 }
                 if (!isSeeking && playa.duration && !isNaN(playa.duration)) {
-                  progressEl.value = (playa.currentTime / playa.duration) * 100;
-                  currentEl.textContent = formatTime(playa.currentTime);
-                  durationEl.textContent = formatTime(playa.duration);
+                  progressEl.value = (playa.currentTime / playa.duration) * 100
+                  currentEl.textContent = formatTime(playa.currentTime)
+                  durationEl.textContent = formatTime(playa.duration)
                 }
                 if (playa.paused) {
-                  iconPlay.style.display = 'block';
-                  iconPause.style.display = 'none';
+                  iconPlay.style.display = 'block'
+                  iconPause.style.display = 'none'
                 } else {
-                  iconPlay.style.display = 'none';
-                  iconPause.style.display = 'block';
+                  iconPlay.style.display = 'none'
+                  iconPause.style.display = 'block'
                 }
               }
-              playa.addEventListener('timeupdate', updateUI);
-              playa.addEventListener('loadedmetadata', function() {
-                durationEl.textContent = formatTime(playa.duration);
-              });
-              playa.addEventListener('ended', function() {
+              playa.addEventListener('timeupdate', updateUI)
+              playa.addEventListener('loadedmetadata', function () {
+                durationEl.textContent = formatTime(playa.duration)
+              })
+              playa.addEventListener('ended', function () {
                 if (currentIndex < tracks.length - 1) {
-                  currentIndex++;
-                  playa.src = tracks[currentIndex];
-                  playa.play();
-                  updateUI();
+                  currentIndex++
+                  playa.src = tracks[currentIndex]
+                  playa.play()
+                  updateUI()
                 } else {
-                  updateUI();
+                  updateUI()
                 }
-              });
-              prevBtn.onclick = function() {
+              })
+              prevBtn.onclick = function () {
                 if (currentIndex > 0) {
-                  currentIndex--;
-                  playa.src = tracks[currentIndex];
-                  playa.play();
-                  updateUI();
+                  currentIndex--
+                  playa.src = tracks[currentIndex]
+                  playa.play()
+                  updateUI()
                 }
-              };
-              playBtn.onclick = function() {
-                if (tracks.length === 0) return;
+              }
+              playBtn.onclick = function () {
+                if (tracks.length === 0) return
                 if (playa.paused) {
                   if (!playa.src || playa.src === window.location.href) {
-                    playa.src = tracks[currentIndex];
+                    playa.src = tracks[currentIndex]
                   }
-                  playa.play();
+                  playa.play()
                 } else {
-                  playa.pause();
+                  playa.pause()
                 }
-              };
-              nextBtn.onclick = function() {
+              }
+              nextBtn.onclick = function () {
                 if (currentIndex < tracks.length - 1) {
-                  currentIndex++;
-                  playa.src = tracks[currentIndex];
-                  playa.play();
-                  updateUI();
+                  currentIndex++
+                  playa.src = tracks[currentIndex]
+                  playa.play()
+                  updateUI()
                 }
-              };
-              progressEl.addEventListener('mousedown', function() { isSeeking = true; });
-              progressEl.addEventListener('mouseup', function() { isSeeking = false; });
-              progressEl.addEventListener('touchstart', function() { isSeeking = true; });
-              progressEl.addEventListener('touchend', function() { isSeeking = false; });
-              progressEl.addEventListener('input', function() {
+              }
+              progressEl.addEventListener('mousedown', function () {
+                isSeeking = true
+              })
+              progressEl.addEventListener('mouseup', function () {
+                isSeeking = false
+              })
+              progressEl.addEventListener('touchstart', function () {
+                isSeeking = true
+              })
+              progressEl.addEventListener('touchend', function () {
+                isSeeking = false
+              })
+              progressEl.addEventListener('input', function () {
                 if (playa.duration && !isNaN(playa.duration)) {
-                  playa.currentTime = (progressEl.value / 100) * playa.duration;
+                  playa.currentTime = (progressEl.value / 100) * playa.duration
                 }
-              });
-              window.play = function(url) {
-                var idx = tracks.indexOf(url);
+              })
+              window.play = function (url) {
+                var idx = tracks.indexOf(url)
                 if (idx >= 0) {
-                  currentIndex = idx;
-                  playa.src = url;
-                  playa.play();
-                  updateUI();
+                  currentIndex = idx
+                  playa.src = url
+                  playa.play()
+                  updateUI()
                 } else {
-                  playa.src = url;
-                  playa.play();
+                  playa.src = url
+                  playa.play()
                 }
-              };
-              updateUI();
-            })();
+              }
+              updateUI()
+            })()
           </script>
         `}
       </>
@@ -899,7 +988,10 @@ app.get('/admin', async (c) => {
   return c.html(
     <Layout2 title="Source Admins" navMode={navMode}>
       <h1>Source Admins</h1>
-      <p>Add an Audius handle to grant them admin access to a source. They will see it on next login.</p>
+      <p>
+        Add an Audius handle to grant them admin access to a source. They will
+        see it on next login.
+      </p>
 
       <form method="post" action="/admin/add" style={{ marginBottom: '2rem' }}>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
@@ -916,7 +1008,9 @@ app.get('/admin', async (c) => {
               ))}
             </select>
           </label>
-          <button type="submit" class="btn-primary">Add Admin</button>
+          <button type="submit" class="btn-primary">
+            Add Admin
+          </button>
         </div>
       </form>
 
@@ -935,10 +1029,20 @@ app.get('/admin', async (c) => {
               <td>{a.source_name}</td>
               <td>
                 {canManageSource(me, a.source_name) && (
-                  <form method="post" action="/admin/remove" style={{ display: 'inline' }}>
+                  <form
+                    method="post"
+                    action="/admin/remove"
+                    style={{ display: 'inline' }}
+                  >
                     <input type="hidden" name="handle" value={a.handle} />
-                    <input type="hidden" name="sourceName" value={a.source_name} />
-                    <button type="submit" class="btn-primary">Remove</button>
+                    <input
+                      type="hidden"
+                      name="sourceName"
+                      value={a.source_name}
+                    />
+                    <button type="submit" class="btn-primary">
+                      Remove
+                    </button>
                   </form>
                 )}
               </td>
@@ -1153,19 +1257,23 @@ app.get('/users', async (c) => {
     pwd.length > 5 ? '•'.repeat(pwd.length - 5) + pwd.slice(-5) : '•••'
 
   const passwordCellCss = `
-    .password-cell { display: flex; align-items: center; gap: 0.5rem; min-width: 220px; }
+    .password-cell {
+      display: flex; align-items: center; gap: 0.5rem; min-width: 220px;
+      min-height: 28px;
+    }
     .password-cell .password-display {
       font-family: var(--pico-font-family-mono, monospace);
-      min-width: 3ch;
+      min-width: 3ch; line-height: 28px;
     }
     .password-cell .icon-btn {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 28px; height: 28px; padding: 0; border: none;
+      display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+      width: 28px; height: 28px; padding: 0; border: none; line-height: 0;
       background: transparent; color: var(--n-fg-muted); cursor: pointer;
       border-radius: 6px; transition: color 0.15s, background 0.15s;
+      position: relative; top: 5px;
     }
     .password-cell .icon-btn:hover { color: var(--n-primary); background: var(--n-primary-muted); }
-    .password-cell .icon-btn svg { width: 16px; height: 16px; }
+    .password-cell .icon-btn svg { width: 16px; height: 16px; display: block; }
     #password-toast {
       position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
       padding: 0.5rem 1rem; background: var(--n-success); color: white;
@@ -1219,7 +1327,9 @@ document.querySelectorAll('.password-cell').forEach(function(cell) {
 
       <style dangerouslySetInnerHTML={{ __html: passwordCellCss }} />
 
-      <div id="password-toast" role="status" aria-live="polite">Copied!</div>
+      <div id="password-toast" role="status" aria-live="polite">
+        Copied!
+      </div>
 
       <table>
         <thead>
@@ -1249,17 +1359,64 @@ document.querySelectorAll('.password-cell').forEach(function(cell) {
                     <span class="password-display" data-masked>
                       {maskPassword(user.password)}
                     </span>
-                    <button type="button" class="icon-btn copy-password" title="Copy password" aria-label="Copy password">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
+                    <button
+                      type="button"
+                      class="icon-btn copy-password"
+                      title="Copy password"
+                      aria-label="Copy password"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke-width="2"
+                        stroke="currentColor"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184"
+                        />
                       </svg>
                     </button>
-                    <button type="button" class="icon-btn toggle-password" title="Reveal password" aria-label="Reveal password">
-                      <svg class="icon-eye" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                    <button
+                      type="button"
+                      class="icon-btn toggle-password"
+                      title="Reveal password"
+                      aria-label="Reveal password"
+                    >
+                      <svg
+                        class="icon-eye"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke-width="2"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"
+                        />
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+                        />
                       </svg>
-                      <svg class="icon-eye-slash" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+                      <svg
+                        class="icon-eye-slash"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke-width="2"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        style="display:none"
+                      >
                         <path d="M10.585 10.587a2 2 0 0 0 2.829 2.828" />
                         <path d="M16.681 16.673a8.717 8.717 0 0 1-4.681 1.327c-3.6 0-6.6-2-9-6c1.272-2.12 2.712-3.678 4.32-4.674m2.86-1.146a9.055 9.055 0 0 1 1.82-.18c3.6 0 6.6 2 9 6c-.666 1.11-1.379 2.067-2.138 2.87" />
                         <path d="M3 3l18 18" />
@@ -1521,9 +1678,8 @@ async function getAudiusUser(c: Context): Promise<ResolvedUser | undefined> {
   const me = JSON.parse(j) as JwtUser
   const handleLower = me.handle?.toLowerCase() ?? ''
   const isSuperAdmin = ADMIN_HANDLES.includes(handleLower)
-  const sourceAdminSources = await sourceAdminRepo.listSourcesForHandle(
-    handleLower
-  )
+  const sourceAdminSources =
+    await sourceAdminRepo.listSourcesForHandle(handleLower)
   return {
     ...me,
     isSuperAdmin,

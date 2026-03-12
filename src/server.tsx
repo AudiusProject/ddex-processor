@@ -409,7 +409,7 @@ app.get('/releases', async (c) => {
             {showAllColumns && (
               <>
                 <th>Clear</th>
-                <th></th>
+                <th>Errors</th>
               </>
             )}
             <th>Status</th>

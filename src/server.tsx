@@ -568,10 +568,9 @@ app.get('/releases/:key', async (c) => {
   const isFutureRelease = new Date(parsedRelease.releaseDate) > new Date()
   const isNoDeal = parsedRelease.deals.length == 0
 
-  const publishableUsers =
-    source?.ddexKey
-      ? await userRepo.byApiKeys([source.ddexKey])
-      : []
+  const publishableUsers = source?.ddexKey
+    ? await userRepo.byApiKeys([source.ddexKey])
+    : []
 
   const associatedUser = parsedRelease.audiusUser
     ? publishableUsers.find((u) => u.id == parsedRelease.audiusUser)
@@ -733,8 +732,7 @@ app.get('/releases/:key', async (c) => {
             <article>
               <h2>Publish</h2>
               <p>
-                <mark>Warning!</mark> Please verify release date + cleared
-                status.
+                <mark>Warning!</mark> Please verify release date.
               </p>
 
               <div>
@@ -1453,95 +1451,95 @@ document.querySelectorAll('.login-link-cell').forEach(function(cell) {
               ? toLoginLink(getEntropy(user.login), user.lookupKey ?? undefined)
               : null
             return (
-            <tr key={user.id}>
-              <td>
-                {user.createdAt
-                  ? formatDateToYYYYMMDD(new Date(user.createdAt))
-                  : '—'}
-              </td>
-              <td>{user.id}</td>
-              <td>{user.handle}</td>
-              <td>{user.name}</td>
-              <td>
-                <b title={user.apiKey}>
-                  {sources.findByApiKey(user.apiKey)?.name}
-                </b>
-              </td>
-              <td class="login-link-td">
-                {loginLink ? (
-                  <div class="login-link-cell" data-login={loginLink}>
-                    <span class="login-display" data-masked>
-                      {maskLoginLink(loginLink)}
-                    </span>
-                    <button
-                      type="button"
-                      class="icon-btn copy-login"
-                      title="Copy login link"
-                      aria-label="Copy login link"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke-width="2"
-                        stroke="currentColor"
+              <tr key={user.id}>
+                <td>
+                  {user.createdAt
+                    ? formatDateToYYYYMMDD(new Date(user.createdAt))
+                    : '—'}
+                </td>
+                <td>{user.id}</td>
+                <td>{user.handle}</td>
+                <td>{user.name}</td>
+                <td>
+                  <b title={user.apiKey}>
+                    {sources.findByApiKey(user.apiKey)?.name}
+                  </b>
+                </td>
+                <td class="login-link-td">
+                  {loginLink ? (
+                    <div class="login-link-cell" data-login={loginLink}>
+                      <span class="login-display" data-masked>
+                        {maskLoginLink(loginLink)}
+                      </span>
+                      <button
+                        type="button"
+                        class="icon-btn copy-login"
+                        title="Copy login link"
+                        aria-label="Copy login link"
                       >
-                        <path
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke-width="2"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        class="icon-btn toggle-login"
+                        title="Reveal login link"
+                        aria-label="Reveal login link"
+                      >
+                        <svg
+                          class="icon-eye"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke-width="2"
+                          stroke="currentColor"
                           stroke-linecap="round"
                           stroke-linejoin="round"
-                          d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      class="icon-btn toggle-login"
-                      title="Reveal login link"
-                      aria-label="Reveal login link"
-                    >
-                      <svg
-                        class="icon-eye"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke-width="2"
-                        stroke="currentColor"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"
+                          />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+                          />
+                        </svg>
+                        <svg
+                          class="icon-eye-slash"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke-width="2"
+                          stroke="currentColor"
                           stroke-linecap="round"
                           stroke-linejoin="round"
-                          d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"
-                        />
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
-                        />
-                      </svg>
-                      <svg
-                        class="icon-eye-slash"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke-width="2"
-                        stroke="currentColor"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        style="display:none"
-                      >
-                        <path d="M10.585 10.587a2 2 0 0 0 2.829 2.828" />
-                        <path d="M16.681 16.673a8.717 8.717 0 0 1-4.681 1.327c-3.6 0-6.6-2-9-6c1.272-2.12 2.712-3.678 4.32-4.674m2.86-1.146a9.055 9.055 0 0 1 1.82-.18c3.6 0 6.6 2 9 6c-.666 1.11-1.379 2.067-2.138 2.87" />
-                        <path d="M3 3l18 18" />
-                      </svg>
-                    </button>
-                  </div>
-                ) : (
-                  <span class="text-muted">—</span>
-                )}
-              </td>
-            </tr>
+                          style="display:none"
+                        >
+                          <path d="M10.585 10.587a2 2 0 0 0 2.829 2.828" />
+                          <path d="M16.681 16.673a8.717 8.717 0 0 1-4.681 1.327c-3.6 0-6.6-2-9-6c1.272-2.12 2.712-3.678 4.32-4.674m2.86-1.146a9.055 9.055 0 0 1 1.82-.18c3.6 0 6.6 2 9 6c-.666 1.11-1.379 2.067-2.138 2.87" />
+                          <path d="M3 3l18 18" />
+                        </svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <span class="text-muted">—</span>
+                  )}
+                </td>
+              </tr>
             )
           })}
         </tbody>

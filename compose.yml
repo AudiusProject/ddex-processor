@@ -2,7 +2,9 @@ services:
   db:
     image: postgres
     environment:
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: example
+      POSTGRES_DB: ddex1
     shm_size: '2g'
     ports:
       - 127.0.0.1:40111:5432

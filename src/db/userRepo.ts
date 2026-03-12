@@ -17,6 +17,12 @@ export const userRepo = {
     return users[0]
   },
 
+  async findByIdAndApiKey(id: string, apiKey: string) {
+    const users: UserRow[] =
+      await sql`select * from users where id = ${id} and "apiKey" = ${apiKey}`
+    return users[0]
+  },
+
   async upsert(user: UserRow) {
     await sql`
       insert into users ${sql(user)}

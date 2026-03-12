@@ -444,6 +444,11 @@ export function Layout2({
             color: var(--n-primary);
             background: var(--n-primary-muted);
           }
+          .status-cell {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--n-fg-muted);
+          }
 
           /* Mark / Badges */
           mark {

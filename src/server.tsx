@@ -402,7 +402,7 @@ app.get('/releases', async (c) => {
       <table>
         <thead>
           <tr>
-            {showAllColumns && <th></th>}
+            <th></th>
             <th>Artist</th>
             <th>Genre</th>
             <th>Release</th>
@@ -412,6 +412,7 @@ app.get('/releases', async (c) => {
                 <th></th>
               </>
             )}
+            <th>Status</th>
             <th>Audius Track</th>
             <th>debug</th>
           </tr>
@@ -419,15 +420,30 @@ app.get('/releases', async (c) => {
         <tbody style="line-height: 1; white-space: nowrap;">
           {rows.map((row) => (
             <tr>
-              {showAllColumns && (
-                <td style="min-width: 80px; width: 120px;">
+              <td style="min-width: 80px; width: 120px;">
+                {row.images?.[0]?.ref ? (
                   <img
-                    src={`/release/${row.source}/${row.key}/${row.images[0]?.ref}/200`}
+                    src={`/release/${row.source}/${row.key}/${row.images[0].ref}/200`}
                     width="80"
                     height="80"
                   />
-                </td>
-              )}
+                ) : (
+                  <div
+                    style={{
+                      width: 80,
+                      height: 80,
+                      background: 'var(--pico-muted-border-color, #ddd)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '10px',
+                      color: 'var(--pico-muted-color)',
+                    }}
+                  >
+                    —
+                  </div>
+                )}
+              </td>
               <td class="truncate">
                 <a
                   href={`/releases/${encodeURIComponent(row.key)}`}
@@ -488,6 +504,7 @@ ${row.soundRecordings.length} tracks`}
                   )}
                 </td>
               )}
+              <td class="status-cell">{row.status}</td>
               <td>
                 {row.entityType == 'track' && (
                   <a href={`${API_HOST}/v1/full/tracks/${row.entityId}`}>
@@ -546,14 +563,18 @@ app.get('/releases/:key', async (c) => {
   }
 
   const parsedRelease = row
+  const source = sources.findByName(row.source)
   const clears = await isClearedRepo.listForRelease(releaseId)
   const isFutureRelease = new Date(parsedRelease.releaseDate) > new Date()
   const isNoDeal = parsedRelease.deals.length == 0
 
-  const allUsers = await userRepo.all()
+  const publishableUsers =
+    source?.ddexKey
+      ? await userRepo.byApiKeys([source.ddexKey])
+      : []
 
   const associatedUser = parsedRelease.audiusUser
-    ? allUsers.find((u) => u.id == parsedRelease.audiusUser)
+    ? publishableUsers.find((u) => u.id == parsedRelease.audiusUser)
     : undefined
 
   const mapArtist = (section: string) => (c: DDEXContributor) =>
@@ -721,7 +742,7 @@ app.get('/releases/:key', async (c) => {
                   <label>Audius User</label>
                   <select name="userId">
                     <option value="">Create claimable account</option>
-                    {allUsers.map((u) => (
+                    {publishableUsers.map((u) => (
                       <option
                         value={u.id}
                         selected={u.id === parsedRelease.audiusUser}
@@ -1556,7 +1577,15 @@ app.post('/publish/:releaseId', async (c) => {
   }
 
   if (body.userId) {
-    release.audiusUser = body.userId as string
+    const userId = body.userId as string
+    if (!source.ddexKey) {
+      return c.text('Forbidden: source has no app key', 403)
+    }
+    const user = await userRepo.findByIdAndApiKey(userId, source.ddexKey)
+    if (!user) {
+      return c.text('Forbidden: user has not authorized this source', 403)
+    }
+    release.audiusUser = userId
   }
 
   release.audiusGenre = body.audiusGenre as Genre

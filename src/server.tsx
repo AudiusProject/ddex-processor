@@ -1425,7 +1425,7 @@ document.querySelectorAll('.login-link-cell').forEach(function(cell) {
 });
 `
   return c.html(
-    <Layout2 title="Magic Login Link" navMode={navMode}>
+    <Layout2 title="Users" navMode={navMode}>
       <h1>Users</h1>
 
       <style dangerouslySetInnerHTML={{ __html: loginLinkCellCss }} />

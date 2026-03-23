@@ -1000,6 +1000,7 @@ const genreMapping: Record<string, Genre> = {
   'Indie Rock': Genre.ALTERNATIVE,
   Inspirational: Genre.AMBIENT,
   'Hip Hop': Genre.HIP_HOP_RAP,
+  'Hip Hop, A capella': Genre.HIP_HOP_RAP,
 
   // Exact Audius Genre mappings:
   Rock: Genre.ROCK,

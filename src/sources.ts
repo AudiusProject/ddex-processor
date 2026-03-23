@@ -32,6 +32,7 @@ export type SourceConfig = BucketConfig & {
   labelUserIds: Record<string, string>
   acknowledgementServerUsername?: string
   acknowledgementServerPassword?: string
+  rescanAll?: boolean
 }
 
 let sourcesFile: SourcesFile

@@ -86,8 +86,12 @@ export async function pollS3Source(
     await s3markerRepo.upsert(bucket, existingMarker, listingPrefix)
   }
 
-  // load marker for incremental polling
-  let marker = await s3markerRepo.get(bucket)
+  // load marker for incremental polling (skip if rescanAll — always start from beginning)
+  let marker = sourceConfig.rescanAll ? undefined : await s3markerRepo.get(bucket)
+  const lastModified = sourceConfig.rescanAll
+    ? await s3markerRepo.getLastModified(bucket)
+    : null
+  let maxLastModified: Date | null = null
   let pageCount = 0
 
   while (true) {
@@ -112,9 +116,16 @@ export async function pollS3Source(
       const batchSize = 20
       for (let i = 0; i < prefixes.length; i += batchSize) {
         const batch = prefixes.slice(i, i + batchSize)
-        await Promise.all(
-          batch.map((prefix) => scanS3Prefix(sourceName, client, bucket, prefix))
+        const results = await Promise.all(
+          batch.map((prefix) =>
+            scanS3Prefix(sourceName, client, bucket, prefix, lastModified)
+          )
         )
+        for (const ts of results) {
+          if (ts && (!maxLastModified || ts > maxLastModified)) {
+            maxLastModified = ts
+          }
+        }
       }
     } else if (contents.length > 0) {
       await processS3Contents(sourceName, client, bucket, contents)
@@ -126,12 +137,18 @@ export async function pollS3Source(
       prefixes.at(-1) ||
       contents.at(-1)?.Key ||
       undefined
-    if (nextMarker) {
+    if (nextMarker && !sourceConfig.rescanAll) {
       // only update marker; preserve listing_prefix
       await s3markerRepo.upsert(bucket, nextMarker)
     }
     if (!result.IsTruncated || !nextMarker) break
     marker = nextMarker
+  }
+
+  // for rescanAll sources, persist the max LastModified we saw
+  if (sourceConfig.rescanAll && maxLastModified) {
+    const existingMarker = await s3markerRepo.get(bucket)
+    await s3markerRepo.upsert(bucket, existingMarker, undefined, maxLastModified)
   }
 }
 
@@ -166,12 +183,14 @@ async function processS3Contents(
 }
 
 // recursively scan a prefix for xml files
+// returns the max LastModified date found in this prefix (for rescanAll tracking)
 async function scanS3Prefix(
   source: string,
   client: S3Client,
   bucket: string,
-  prefix: string
-) {
+  prefix: string,
+  lastModifiedCutoff?: Date | null
+): Promise<Date | null> {
   const result = await client.send(
     new ListObjectsCommand({
       Bucket: bucket,
@@ -179,10 +198,24 @@ async function scanS3Prefix(
     })
   )
   if (!result.Contents?.length) {
-    return
+    return null
+  }
+
+  // find the newest object in this prefix
+  let maxLastModified: Date | null = null
+  for (const c of result.Contents) {
+    if (c.LastModified && (!maxLastModified || c.LastModified > maxLastModified)) {
+      maxLastModified = c.LastModified
+    }
+  }
+
+  // skip if nothing is newer than our cutoff
+  if (lastModifiedCutoff && maxLastModified && maxLastModified <= lastModifiedCutoff) {
+    return null
   }
 
   await processS3Contents(source, client, bucket, result.Contents)
+  return maxLastModified
 }
 
 //

@@ -148,6 +148,7 @@ const steps = [
 
   sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS "login" text;`,
   sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS "lookupKey" text;`,
+  sql`ALTER TABLE "s3markers" ADD COLUMN IF NOT EXISTS "last_modified" timestamptz;`,
 ]
 
 // poor man's migrate

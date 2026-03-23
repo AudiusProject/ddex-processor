@@ -11,6 +11,7 @@ import {
 } from './acknowledgement'
 import { releaseRepo, userRepo, xmlRepo } from './db'
 import { sources } from './sources'
+import { genreMapping } from './genreMapping'
 import { lowerAscii, omitEmpty } from './util'
 
 type CH = cheerio.Cheerio<Element>
@@ -993,63 +994,6 @@ export function parseReleaseIds($el: CH): DDEXReleaseIds {
     sici: toText($el.find('ReleaseId > SICI')),
     proprietary_id: toText($el.find('ReleaseId > ProprietaryId')),
   })
-}
-
-const genreMapping: Record<string, Genre> = {
-  Dance: Genre.ELECTRONIC,
-  'Indie Rock': Genre.ALTERNATIVE,
-  Inspirational: Genre.AMBIENT,
-  'Hip Hop': Genre.HIP_HOP_RAP,
-  'Hip Hop, A capella': Genre.HIP_HOP_RAP,
-
-  // Exact Audius Genre mappings:
-  Rock: Genre.ROCK,
-  Metal: Genre.METAL,
-  Alternative: Genre.ALTERNATIVE,
-  'Hip-Hop/Rap': Genre.HIP_HOP_RAP,
-  Experimental: Genre.EXPERIMENTAL,
-  Punk: Genre.PUNK,
-  Folk: Genre.FOLK,
-  Pop: Genre.POP,
-  Ambient: Genre.AMBIENT,
-  Soundtrack: Genre.SOUNDTRACK,
-  World: Genre.WORLD,
-  Jazz: Genre.JAZZ,
-  Acoustic: Genre.ACOUSTIC,
-  Funk: Genre.FUNK,
-  'R&B/Soul': Genre.R_AND_B_SOUL,
-  Devotional: Genre.DEVOTIONAL,
-  Classical: Genre.CLASSICAL,
-  Reggae: Genre.REGGAE,
-  Podcasts: Genre.PODCASTS,
-  Country: Genre.COUNTRY,
-  'Spoken Word': Genre.SPOKEN_WORK,
-  Comedy: Genre.COMEDY,
-  Blues: Genre.BLUES,
-  Kids: Genre.KIDS,
-  Audiobooks: Genre.AUDIOBOOKS,
-  Latin: Genre.LATIN,
-  'Lo-Fi': Genre.LOFI,
-  Hyperpop: Genre.HYPERPOP,
-  Dancehall: Genre.DANCEHALL,
-  Techno: Genre.TECHNO,
-  Trap: Genre.TRAP,
-  House: Genre.HOUSE,
-  'Tech House': Genre.TECH_HOUSE,
-  'Deep House': Genre.DEEP_HOUSE,
-  Disco: Genre.DISCO,
-  Electro: Genre.ELECTRO,
-  Jungle: Genre.JUNGLE,
-  'Progressive House': Genre.PROGRESSIVE_HOUSE,
-  Hardstyle: Genre.HARDSTYLE,
-  'Glitch Hop': Genre.GLITCH_HOP,
-  Trance: Genre.TRANCE,
-  'Future Bass': Genre.FUTURE_BASS,
-  'Future House': Genre.FUTURE_HOUSE,
-  'Tropical House': Genre.TROPICAL_HOUSE,
-  Downtempo: Genre.DOWNTEMPO,
-  'Drum & Bass': Genre.DRUM_AND_BASS,
-  Dubstep: Genre.DUBSTEP,
 }
 
 function resolveAudiusGenre(

@@ -709,6 +709,24 @@ app.get('/releases/:key', async (c) => {
               </div>
             )}
 
+            {row.publishErrorCount > 0 && (
+              <article style={{ borderRadius: '8px', background: '#2a1215', border: '1px solid #5c2b2e' }}>
+                <header style={{ color: '#f87171' }}>
+                  Publish Error ({row.publishErrorCount} attempt{row.publishErrorCount > 1 ? 's' : ''})
+                </header>
+                <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '85%', maxHeight: '200px', overflow: 'auto' }}>
+                  {row.lastPublishError}
+                </pre>
+                {(me.isSuperAdmin || me.sourceAdminSources.includes(row.source)) && (
+                  <form action={`/releases/${releaseId}/clear-error`} method="post" style={{ marginTop: '10px' }}>
+                    <button type="submit" class="btn-secondary">
+                      Clear Errors
+                    </button>
+                  </form>
+                )}
+              </article>
+            )}
+
             <button
               type="button"
               class="btn-primary"
@@ -1317,6 +1335,19 @@ app.get('/releases/:key/error', async (c) => {
     return c.text('Access denied', 403)
   }
   return c.text(row.lastPublishError)
+})
+
+app.post('/releases/:key/clear-error', async (c) => {
+  if (!requireSourceAdminOrSuper(c)) return c.text('Access denied', 403)
+  const releaseId = c.req.param('key')
+  const row = await releaseRepo.get(releaseId)
+  if (!row) return c.json({ error: 'not found' }, 404)
+  const me = c.get('me') as ResolvedUser
+  if (!me.isSuperAdmin && !me.sourceAdminSources.includes(row.source)) {
+    return c.text('Access denied', 403)
+  }
+  await releaseRepo.clearPublishError(releaseId)
+  return c.redirect(`/releases/${releaseId}`)
 })
 
 app.get('/users', async (c) => {

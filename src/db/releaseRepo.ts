@@ -222,4 +222,13 @@ export const releaseRepo = {
       where "key" = ${key}
     `
   },
+
+  async clearPublishError(key: string) {
+    await sql`
+      update releases set
+        "lastPublishError" = null,
+        "publishErrorCount" = 0
+      where "key" = ${key}
+    `
+  },
 }

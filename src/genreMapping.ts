@@ -45,6 +45,7 @@ export const genreMapping: Record<string, Genre> = {
   Rock: Genre.ROCK,
   'Indie Rock': Genre.ALTERNATIVE,
   'Blues-Rock': Genre.ROCK,
+  'Blues Rock': Genre.ROCK,
   'College Rock': Genre.ROCK,
   'Folk-Rock': Genre.FOLK,
   'Goth Rock': Genre.ROCK,

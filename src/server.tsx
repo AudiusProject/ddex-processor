@@ -710,8 +710,8 @@ app.get('/releases/:key', async (c) => {
             )}
 
             {row.publishErrorCount > 0 && (
-              <article style={{ borderRadius: '8px', background: '#2a1215', border: '1px solid #5c2b2e' }}>
-                <header style={{ color: '#f87171' }}>
+              <article style={{ borderRadius: '8px' }}>
+                <header style={{ color: '#dc2626' }}>
                   Publish Error ({row.publishErrorCount} attempt{row.publishErrorCount > 1 ? 's' : ''})
                 </header>
                 <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '85%', maxHeight: '200px', overflow: 'auto' }}>

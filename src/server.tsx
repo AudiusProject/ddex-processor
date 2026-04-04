@@ -1346,6 +1346,19 @@ app.post('/releases/:key/clear-error', async (c) => {
   if (!me.isSuperAdmin && !me.sourceAdminSources.includes(row.source)) {
     return c.text('Access denied', 403)
   }
+  // reparse the XML so updated genre mappings etc. take effect
+  if (row.xmlUrl?.startsWith('s3:')) {
+    const source = sources.findByName(row.source)
+    if (source) {
+      const { bucket, key: s3Key } = parseS3Url(row.xmlUrl)
+      const s3 = dialS3(source)
+      const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: s3Key }))
+      const xml = await Body?.transformToString()
+      if (xml) {
+        await parseDdexXml(row.source, row.xmlUrl, xml)
+      }
+    }
+  }
   await releaseRepo.clearPublishError(releaseId)
   return c.redirect(`/releases/${releaseId}`)
 })

@@ -227,7 +227,8 @@ export const releaseRepo = {
     await sql`
       update releases set
         "lastPublishError" = null,
-        "publishErrorCount" = 0
+        "publishErrorCount" = 0,
+        status = ${ReleaseProcessingStatus.PublishPending}
       where "key" = ${key}
     `
   },

@@ -104,6 +104,7 @@ export const genreMapping: Record<string, Genre> = {
 
   // Country
   Country: Genre.COUNTRY,
+  'Country-Rock': Genre.COUNTRY,
 
   // Folk
   Folk: Genre.FOLK,

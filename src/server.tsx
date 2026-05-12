@@ -464,6 +464,13 @@ app.get('/releases', async (c) => {
                     </a>
                   </em>
                 </small>
+                {row.mediaDeletedAt && !row.entityId && (
+                  <div>
+                    <mark class="not-cleared" title="The S3 media for this release has been purged. Re-request a delivery from the distributor.">
+                      No media
+                    </mark>
+                  </div>
+                )}
               </td>
 
               <td>
@@ -707,6 +714,18 @@ app.get('/releases/:key', async (c) => {
               <div style={{ margin: '8px 0' }}>
                 <mark>No Compatible Deal</mark>
               </div>
+            )}
+
+            {row.mediaDeletedAt && !row.entityId && (
+              <article style={{ borderRadius: '8px', margin: '8px 0' }}>
+                <header style={{ color: 'var(--n-error)' }}>No media</header>
+                <div style={{ fontSize: '0.9em' }}>
+                  The S3 media for this release has been purged
+                  ({new Date(row.mediaDeletedAt).toLocaleDateString()}).
+                  Ask the distributor to re-deliver this release before
+                  publishing.
+                </div>
+              </article>
             )}
 
             {row.publishErrorCount > 0 && (
@@ -1257,6 +1276,19 @@ app.get('/release/:source/:key/:ref/:size?', async (c) => {
   const asset = await assetRepo.get(source, key, ref)
   if (!asset) return c.json({ error: 'not found' }, 404)
 
+  // if media has been reclaimed from S3, fall back to Audius (when published)
+  // or a broken-image placeholder (when never published)
+  const release = await releaseRepo.get(key)
+  if (release?.mediaDeletedAt) {
+    const isImageRef = release.images.some((i) => i.ref === ref)
+    if (release.entityId) {
+      const fallback = await audiusMediaFallbackUrl(release, ref, isImageRef)
+      if (fallback) return c.redirect(fallback, 302)
+    }
+    if (isImageRef) return brokenImageResponse(c)
+    return c.text('Media no longer available', 410)
+  }
+
   const ok = await readAssetWithCaching(
     asset.xmlUrl,
     asset.filePath,
@@ -1276,6 +1308,75 @@ app.get('/release/:source/:key/:ref/:size?', async (c) => {
   c.header('Cache-Control', 'max-age=7200')
   return c.body(ok.buffer as any)
 })
+
+// pick the closest Audius artwork size to a requested local size like "200"
+function pickAudiusArtworkUrl(artwork: any, size?: string): string | undefined {
+  if (!artwork) return
+  const buckets: Array<keyof typeof artwork> = ['150x150', '480x480', '1000x1000']
+  const target = parseInt(size || '480') || 480
+  let best: string | undefined
+  let bestDelta = Infinity
+  for (const b of buckets) {
+    const url = artwork[b]
+    if (!url) continue
+    const d = Math.abs(parseInt(String(b)) - target)
+    if (d < bestDelta) {
+      bestDelta = d
+      best = url
+    }
+  }
+  return best
+}
+
+async function audiusMediaFallbackUrl(
+  release: ReleaseRow,
+  ref: string,
+  isImage: boolean
+): Promise<string | undefined> {
+  try {
+    if (release.entityType === 'track') {
+      const resp = await fetch(`${API_HOST}/v1/tracks/${release.entityId}`)
+      if (!resp.ok) return
+      const j: any = await resp.json()
+      const track = Array.isArray(j.data) ? j.data[0] : j.data
+      if (!track) return
+      if (isImage) return pickAudiusArtworkUrl(track.artwork)
+      return `${API_HOST}/v1/tracks/${release.entityId}/stream`
+    }
+    if (release.entityType === 'album') {
+      const resp = await fetch(`${API_HOST}/v1/full/playlists/${release.entityId}`)
+      if (!resp.ok) return
+      const j: any = await resp.json()
+      const album = j.data?.[0]
+      if (!album) return
+      if (isImage) return pickAudiusArtworkUrl(album.artwork)
+      const sr = release.soundRecordings.find((s) => s.ref === ref)
+      if (!sr?.isrc) return
+      const match = album.tracks?.find((t: any) => t.isrc && t.isrc === sr.isrc)
+      if (!match?.id) return
+      return `${API_HOST}/v1/tracks/${match.id}/stream`
+    }
+  } catch (e) {
+    console.log('audiusMediaFallbackUrl failed', release.key, ref, e)
+  }
+}
+
+function brokenImageResponse(c: Context) {
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="No media">
+  <rect width="200" height="200" fill="#e9e3ff"/>
+  <g stroke="#7f6ad6" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="40" y="50" width="120" height="100" rx="8"/>
+    <circle cx="75" cy="85" r="10"/>
+    <path d="M48 138 L88 100 L120 130 L142 110 L152 122"/>
+    <path d="M58 50 L142 150" stroke="#f94d62"/>
+  </g>
+  <text x="100" y="178" font-family="DM Sans,system-ui,sans-serif" font-size="14" fill="#4a5263" text-anchor="middle">No media</text>
+</svg>`
+  c.header('Content-Type', 'image/svg+xml')
+  c.header('Cache-Control', 'max-age=300')
+  return c.body(svg)
+}
 
 app.get('/xmls/:xmlUrl', async (c) => {
   const me = c.get('me') as ResolvedUser

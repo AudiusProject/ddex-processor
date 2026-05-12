@@ -151,6 +151,7 @@ const steps = [
   sql`ALTER TABLE "s3markers" ADD COLUMN IF NOT EXISTS "last_modified" timestamptz;`,
 
   sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "audiusHandle" text;`,
+  sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "mediaDeletedAt" timestamptz;`,
 ]
 
 // poor man's migrate

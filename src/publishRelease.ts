@@ -9,7 +9,7 @@ import {
 } from './db'
 import { publogRepo } from './db/publogRepo'
 import { DDEXContributor, DDEXRelease, DDEXResource, DealPayGated } from './parseDelivery'
-import { readAssetWithCaching } from './s3poller'
+import { deleteReleaseMedia, readAssetWithCaching } from './s3poller'
 import { getSdk } from './sdk'
 import { SourceConfig, sources } from './sources'
 import { decodeId } from './util'
@@ -150,6 +150,11 @@ export async function publishRelease(
       publishedAt: new Date().toISOString(),
     })
 
+    // media is now on Audius — drop it from the source S3 bucket to save space
+    await deleteReleaseMedia(releaseRow).catch((e) =>
+      console.log('deleteReleaseMedia failed', releaseRow.key, e)
+    )
+
     // todo: poll for result to ensure it's actually created
 
     // return result
@@ -187,6 +192,11 @@ export async function publishRelease(
       blockHash: result.blockHash,
       publishedAt: new Date().toISOString(),
     })
+
+    // media is now on Audius — drop it from the source S3 bucket to save space
+    await deleteReleaseMedia(releaseRow).catch((e) =>
+      console.log('deleteReleaseMedia failed', releaseRow.key, e)
+    )
 
     // todo: poll for result to ensure it's actually created
   }

@@ -240,4 +240,27 @@ export const releaseRepo = {
       where "key" = ${key}
     `
   },
+
+  async markMediaDeleted(key: string) {
+    await sql`
+      update releases set "mediaDeletedAt" = now()
+      where "key" = ${key} and "mediaDeletedAt" is null
+    `
+  },
+
+  // releases that arrived > cutoff ago, never reached Published/Deleted,
+  // and still have their delivered media on disk in S3
+  async findStaleUnpublishedWithMedia(cutoff: Date) {
+    const rows: ReleaseRow[] = await sql`
+      select * from releases
+      where "mediaDeletedAt" is null
+        and status not in (
+          ${ReleaseProcessingStatus.Published},
+          ${ReleaseProcessingStatus.Deleted}
+        )
+        and "createdAt" < ${cutoff.toISOString()}
+      order by "createdAt" asc
+    `
+    return rows
+  },
 }

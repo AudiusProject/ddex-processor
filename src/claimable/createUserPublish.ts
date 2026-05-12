@@ -28,7 +28,11 @@ export async function publishToClaimableAccount(releaseId: string) {
   }
 
   const artistName = release.artists[0].name
-  const handle = artistName.replace(/[^a-zA-Z0-9.]/g, '')
+  // releaseRow.audiusHandle is an admin override set in the UI when the
+  // default-derived handle collides with an existing audius user. When set,
+  // we trust it and bypass the per-row regex stripping.
+  const handle =
+    releaseRow.audiusHandle || artistName.replace(/[^a-zA-Z0-9.]/g, '')
 
   // read image asset file
   async function resolveFile({ ref }: DDEXResource) {
@@ -43,105 +47,135 @@ export async function publishToClaimableAccount(releaseId: string) {
   const email = `ddex-support+${handle}@audius.co`
   const password = randomBytes(16).toString('hex')
 
-  try {
-    // attempt to find existing user record
-    // if not found, create a claimable account
-    let encodedUserId = await userRepo.match(source.ddexKey, [artistName])
-    if (!encodedUserId) {
-      // no user: create claimable user
-      console.log(`=== creating claimable account for ${artistName}`)
-      const hedgehog = getHedgehog()
-      const identityResult = await hedgehog.signUp({
-        username: email,
-        password,
-      })
-      console.log('identityResult', identityResult)
+  // attempt to find existing user record
+  // if not found, create a claimable account
+  let encodedUserId = await userRepo.match(source.ddexKey, [artistName])
+  if (!encodedUserId) {
+    // Refuse to signUp if the handle is already claimed on Audius — that
+    // produces an orphaned identity row with no audius user (createUser fails
+    // downstream because the handle is taken). Admin can set audiusHandle in
+    // the UI to publish under a different handle.
+    await assertHandleAvailable(handle, source.env || 'staging')
 
-      const { login } = await generateRecoveryInfo()
-      const lookupKey = await WalletManager.createAuthLookupKey(
-        email,
-        password,
-        hedgehog.createKey
-      )
+    // no user: create claimable user
+    console.log(`=== creating claimable account for ${artistName}`)
+    const hedgehog = getHedgehog()
+    const identityResult = await hedgehog.signUp({
+      username: email,
+      password,
+    })
+    console.log('identityResult', identityResult)
 
-      const audiusWalletClient = createHedgehogWalletClient(getHedgehog())
-      const userSdk = sdk({
-        appName: 'ddex',
-        environment: source.env || 'staging',
-        services: {
-          audiusWalletClient,
-        },
-      })
-
-      const newUser = await userSdk.users.createUser({
-        metadata: {
-          handle: handle,
-          name: artistName,
-          wallet: identityResult.getAddressString(),
-        },
-      })
-
-      await publogRepo.log({
-        release_id: release.key,
-        msg: 'created user',
-        extra: newUser,
-      })
-
-      // const entropy = localStorage.getItem('hedgehog-entropy-key')
-      encodedUserId = encodeId(newUser.metadata.userId)
-      console.log(newUser, encodedUserId)
-
-      // upload profile picture + cover photo
-      const updateImageResult = await userSdk.users.updateProfile({
-        userId: encodedUserId,
-        metadata: {},
-        profilePictureFile: imageFile as any,
-        coverArtFile: imageFile as any,
-      })
-      console.log('updateImageResult', updateImageResult)
-
-      await publogRepo.log({
-        release_id: release.key,
-        msg: 'set user image',
-        extra: updateImageResult,
-      })
-
-      // authorize source ddex app
-      const grantResult = await userSdk.grants.createGrant({
-        userId: encodedUserId,
-        appApiKey: source.ddexKey,
-      })
-      console.log('grantResult', grantResult)
-
-      await publogRepo.log({
-        release_id: release.key,
-        msg: 'user grant',
-        extra: grantResult,
-      })
-
-      // save user details to db
-      await userRepo.upsert({
-        id: encodedUserId,
-        apiKey: source.ddexKey,
-        handle: handle,
-        name: artistName,
-        login,
-        lookupKey,
-        createdAt: new Date(),
-      })
-    }
-
-    // save release with associated audius user
-    release.audiusUser = encodedUserId
-    await releaseRepo.upsert(
-      releaseRow.source,
-      releaseRow.xmlUrl,
-      releaseRow.messageTimestamp,
-      release
+    const { login } = await generateRecoveryInfo()
+    const lookupKey = await WalletManager.createAuthLookupKey(
+      email,
+      password,
+      hedgehog.createKey
     )
 
-    await publishRelease(source!, releaseRow, release)
-  } catch (e) {
-    console.log('publish error', e)
+    const audiusWalletClient = createHedgehogWalletClient(getHedgehog())
+    const userSdk = sdk({
+      appName: 'ddex',
+      environment: source.env || 'staging',
+      services: {
+        audiusWalletClient,
+      },
+    })
+
+    const newUser = await userSdk.users.createUser({
+      metadata: {
+        handle: handle,
+        name: artistName,
+        wallet: identityResult.getAddressString(),
+      },
+    })
+
+    await publogRepo.log({
+      release_id: release.key,
+      msg: 'created user',
+      extra: newUser,
+    })
+
+    encodedUserId = encodeId(newUser.metadata.userId)
+    console.log(newUser, encodedUserId)
+
+    // upload profile picture + cover photo
+    const updateImageResult = await userSdk.users.updateProfile({
+      userId: encodedUserId,
+      metadata: {},
+      profilePictureFile: imageFile as any,
+      coverArtFile: imageFile as any,
+    })
+    console.log('updateImageResult', updateImageResult)
+
+    await publogRepo.log({
+      release_id: release.key,
+      msg: 'set user image',
+      extra: updateImageResult,
+    })
+
+    // authorize source ddex app
+    const grantResult = await userSdk.grants.createGrant({
+      userId: encodedUserId,
+      appApiKey: source.ddexKey,
+    })
+    console.log('grantResult', grantResult)
+
+    await publogRepo.log({
+      release_id: release.key,
+      msg: 'user grant',
+      extra: grantResult,
+    })
+
+    // save user details to db
+    await userRepo.upsert({
+      id: encodedUserId,
+      apiKey: source.ddexKey,
+      handle: handle,
+      name: artistName,
+      login,
+      lookupKey,
+      createdAt: new Date(),
+    })
   }
+
+  // save release with associated audius user
+  release.audiusUser = encodedUserId
+  await releaseRepo.upsert(
+    releaseRow.source,
+    releaseRow.xmlUrl,
+    releaseRow.messageTimestamp,
+    release
+  )
+
+  await publishRelease(source!, releaseRow, release)
+}
+
+/**
+ * Throws HandleClaimed if a discovery user already exists with this handle.
+ * Caller's error gets surfaced as the release's lastPublishError, prompting
+ * the admin to set an audiusHandle override in the UI.
+ */
+async function assertHandleAvailable(handle: string, env: string) {
+  const apiHost =
+    env === 'production'
+      ? 'https://api.audius.co'
+      : 'https://api.staging.audius.co'
+  const res = await fetch(
+    `${apiHost}/v1/users/handle/${encodeURIComponent(handle)}`
+  )
+  if (res.status === 404) return
+  if (!res.ok) {
+    throw new Error(
+      `discovery handle check failed for ${handle}: HTTP ${res.status}`
+    )
+  }
+  const profileUrl =
+    env === 'production'
+      ? `https://audius.co/${handle}`
+      : `https://staging.audius.co/${handle}`
+  throw new Error(
+    `HandleClaimed: '${handle}' already exists on Audius (${profileUrl}). ` +
+      `Set audiusHandle in the UI to publish under a different handle.`
+  )
 }

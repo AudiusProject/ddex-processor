@@ -185,6 +185,14 @@ export const releaseRepo = {
     `
   },
 
+  async markAudiusHandle(key: string, audiusHandle: string | null) {
+    await sql`
+      update releases set
+      "audiusHandle"=${audiusHandle}
+      where key = ${key}
+    `
+  },
+
   async markForDelete(
     source: string,
     xmlUrl: string,

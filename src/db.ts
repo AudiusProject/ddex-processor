@@ -53,6 +53,7 @@ export type ReleaseRow = DDEXRelease & {
   publishedAt?: string
   lastPublishError: string
   publishErrorCount: number
+  mediaDeletedAt?: string
 }
 
 export type S3MarkerRow = {

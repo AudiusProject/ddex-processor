@@ -150,6 +150,9 @@ export async function publishRelease(
       publishedAt: new Date().toISOString(),
     })
 
+    // media stays in S3 for a grace period after publishing; the
+    // purgeOldPublishedMedia worker routine reclaims it later.
+
     // todo: poll for result to ensure it's actually created
 
     // return result
@@ -187,6 +190,9 @@ export async function publishRelease(
       blockHash: result.blockHash,
       publishedAt: new Date().toISOString(),
     })
+
+    // media stays in S3 for a grace period after publishing; the
+    // purgeOldPublishedMedia worker routine reclaims it later.
 
     // todo: poll for result to ensure it's actually created
   }

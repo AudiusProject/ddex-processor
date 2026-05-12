@@ -1,13 +1,14 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   ListObjectsCommand,
   S3Client,
   S3ClientConfig,
 } from '@aws-sdk/client-s3'
-import { mkdir, readFile, rename, stat, unlink, writeFile } from 'fs/promises'
+import { mkdir, readFile, rename, rm, stat, unlink, writeFile } from 'fs/promises'
 import { basename, dirname, join, resolve } from 'path'
 import sharp from 'sharp'
-import { s3markerRepo } from './db'
+import { assetRepo, ReleaseRow, releaseRepo, s3markerRepo } from './db'
 import { parseDdexXml } from './parseDelivery'
 import { BucketConfig, SourceConfig, sources } from './sources'
 
@@ -330,4 +331,55 @@ export function parseS3Url(s3Url: string): { bucket: string; key: string } {
   const match = s3Url.match(/^s3:\/\/([^\/]+)\/(.+)$/)
   if (!match) throw new Error('Invalid S3 URL format')
   return { bucket: match[1], key: match[2] }
+}
+
+// Delete all S3 media (images + sound recordings) for a release, clear local
+// /tmp cache copies, and mark the release as mediaDeletedAt = now.
+// Safe to call repeatedly: missing assets / S3 keys are tolerated.
+export async function deleteReleaseMedia(release: ReleaseRow) {
+  if (release.mediaDeletedAt) return
+
+  const refs = [
+    ...release.images.map((r) => r.ref),
+    ...release.soundRecordings.map((r) => r.ref),
+  ]
+  for (const ref of refs) {
+    if (!ref) continue
+    const asset = await assetRepo.get(release.source, release.key, ref)
+    if (!asset) continue
+    if (!asset.xmlUrl.startsWith('s3:')) continue
+
+    const pathPart = asset.filePath
+      ? `${asset.filePath}${asset.fileName}`
+      : asset.fileName
+    const s3url = new URL(pathPart, asset.xmlUrl)
+    const Bucket = s3url.host
+    const Key = decodeURIComponent(s3url.pathname.substring(1))
+
+    try {
+      const source = sources.findByXmlUrl(asset.xmlUrl)
+      const s3 = dialS3(source)
+      await s3.send(new DeleteObjectCommand({ Bucket, Key }))
+    } catch (e) {
+      console.log(`deleteReleaseMedia: s3 delete failed for ${Bucket}/${Key}`, e)
+    }
+
+    // also drop any local cache copies (full + resized variants)
+    const cacheRoot = `/tmp/ddex_cache/${Bucket}`
+    try {
+      const fullPath = join(cacheRoot, Key)
+      await rm(fullPath, { force: true })
+    } catch {}
+    // resized variants live at /tmp/ddex_cache/<bucket>/<size>/<key>;
+    // we only know sizes when callers request them, so nuke any sibling
+    // size directories that contain the same Key path.
+    try {
+      const sizeDirs = ['200', '480', '1000']
+      for (const s of sizeDirs) {
+        await rm(join(cacheRoot, s, Key), { force: true })
+      }
+    } catch {}
+  }
+
+  await releaseRepo.markMediaDeleted(release.key)
 }

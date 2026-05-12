@@ -533,6 +533,18 @@ ${row.soundRecordings.length} tracks`}
   )
 })
 
+// Strip stack-trace frames from a stored Error.stack so the inline release
+// card stays compact. Full text is still available on the /error page.
+function trimErrorForDisplay(text: string | null | undefined): string {
+  if (!text) return ''
+  return text
+    .split('\n')
+    .filter((line) => !/^\s+at\s/.test(line))
+    .join('\n')
+    .replace(/^Error:\s*/, '')
+    .trim()
+}
+
 app.get('/releases/:key', async (c) => {
   const me = c.get('me') as ResolvedUser
   if (!requireSourceAdminOrSuper(c)) {
@@ -734,15 +746,23 @@ app.get('/releases/:key', async (c) => {
                   Publish Error ({row.publishErrorCount} attempt{row.publishErrorCount > 1 ? 's' : ''})
                 </header>
                 <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '85%', maxHeight: '200px', overflow: 'auto' }}>
-                  {row.lastPublishError}
+                  {trimErrorForDisplay(row.lastPublishError)}
                 </pre>
-                {(me.isSuperAdmin || me.sourceAdminSources.includes(row.source)) && (
-                  <form action={`/releases/${releaseId}/clear-error`} method="post" style={{ marginTop: '10px' }}>
-                    <button type="submit" class="btn-secondary">
-                      Clear Errors
-                    </button>
-                  </form>
-                )}
+                <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
+                  {(me.isSuperAdmin || me.sourceAdminSources.includes(row.source)) && (
+                    <form action={`/releases/${releaseId}/clear-error`} method="post">
+                      <button type="submit" class="btn-secondary">
+                        Clear Errors
+                      </button>
+                    </form>
+                  )}
+                  <a
+                    href={`/releases/${encodeURIComponent(releaseId)}/error`}
+                    style={{ alignSelf: 'center', fontSize: '85%' }}
+                  >
+                    Show full error
+                  </a>
+                </div>
               </article>
             )}
 

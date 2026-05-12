@@ -45,6 +45,7 @@ export type ReleaseRow = DDEXRelease & {
   numNotCleared: number
   prependArtist: string
   useDefaultDeal: boolean
+  audiusHandle?: string
   entityType?: 'track' | 'album'
   entityId?: string
   blockHash?: string

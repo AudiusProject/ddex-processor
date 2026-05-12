@@ -795,6 +795,25 @@ app.get('/releases/:key', async (c) => {
                       ))}
                   </select>
                 </fieldset>
+
+                <fieldset>
+                  <label title="Override the handle used for the auto-created Audius account. Only used when no Audius User is selected above. Leave blank to derive from artist name.">
+                    Audius Handle Override
+                  </label>
+                  <input
+                    type="text"
+                    name="audiusHandle"
+                    value={row.audiusHandle || ''}
+                    placeholder={parsedRelease.artists[0]?.name?.replace(
+                      /[^a-zA-Z0-9.]/g,
+                      ''
+                    )}
+                  />
+                  <small>
+                    If the default handle is already taken on Audius, set a
+                    unique one here. Allowed chars: letters, digits, dots.
+                  </small>
+                </fieldset>
               </div>
 
               <footer>
@@ -1618,6 +1637,11 @@ app.post('/publish/:releaseId', async (c) => {
     await releaseRepo.markUseDefaultDeal(releaseId, true)
   }
 
+  if (typeof body.audiusHandle === 'string') {
+    const trimmed = body.audiusHandle.trim()
+    await releaseRepo.markAudiusHandle(releaseId, trimmed || null)
+  }
+
   if (body.userId) {
     const userId = body.userId as string
     if (!source.ddexKey) {
@@ -1649,7 +1673,10 @@ app.post('/publish/:releaseId', async (c) => {
   // can exceed 60s request timeout, so fire and forget
   // TODO: this will always publish new release
   // need to add conditional update logic
-  publishToClaimableAccount(releaseId)
+  publishToClaimableAccount(releaseId).catch(async (e) => {
+    console.log('publish error', releaseId, e)
+    await releaseRepo.addPublishError(releaseId, e)
+  })
 
   return c.redirect(`/releases/${releaseId}/publog?poll=1`)
 })

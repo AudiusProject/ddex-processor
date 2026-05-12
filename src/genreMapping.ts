@@ -10,6 +10,10 @@ export const genreMapping: Record<string, Genre> = {
   'Hip-Hop': Genre.HIP_HOP_RAP,
   'Hip-hop/Rap': Genre.HIP_HOP_RAP,
   'Hip Hop/Rap': Genre.HIP_HOP_RAP,
+  'Hip-Hop, Rap': Genre.HIP_HOP_RAP,
+  'Hio hop': Genre.HIP_HOP_RAP,
+  'Baltimore Club HIPHOP': Genre.HIP_HOP_RAP,
+  'Pop, Dance, Hip Hop': Genre.HIP_HOP_RAP,
   'Alternative Rap': Genre.HIP_HOP_RAP,
   'Gangsta Rap': Genre.HIP_HOP_RAP,
   'Hardcore Rap': Genre.HIP_HOP_RAP,
@@ -26,6 +30,7 @@ export const genreMapping: Record<string, Genre> = {
   Electronic: Genre.ELECTRONIC,
   Electronica: Genre.ELECTRONIC,
   'Electronic, Pop': Genre.ELECTRONIC,
+  'EDM, HIP HOP': Genre.ELECTRONIC,
   'IDM/Experimental': Genre.ELECTRONIC,
   Breakbeat: Genre.ELECTRONIC,
   Bassline: Genre.ELECTRONIC,
@@ -84,9 +89,13 @@ export const genreMapping: Record<string, Genre> = {
   Soul: Genre.R_AND_B_SOUL,
   'Afro Soul': Genre.R_AND_B_SOUL,
 
+  // Funk variants
+  'Funk, R,% B, Soul,': Genre.FUNK,
+
   // Jazz variants
   Jazz: Genre.JAZZ,
   'Smooth Jazz': Genre.JAZZ,
+  'Jazz Funk': Genre.FUNK,
 
   // Blues variants
   Blues: Genre.BLUES,
@@ -192,6 +201,7 @@ export const genreMapping: Record<string, Genre> = {
 
   // Gospel / Devotional
   'Devotional & Spiritual': Genre.DEVOTIONAL,
+  'Devotional/Spiritual': Genre.DEVOTIONAL,
   Christian: Genre.DEVOTIONAL,
   'Christian & Gospel': Genre.DEVOTIONAL,
   Gospel: Genre.DEVOTIONAL,

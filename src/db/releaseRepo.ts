@@ -263,4 +263,18 @@ export const releaseRepo = {
     `
     return rows
   },
+
+  // releases successfully published > cutoff ago whose source media still
+  // lingers in S3 (we keep it for a grace period in case we need to retry)
+  async findStalePublishedWithMedia(cutoff: Date) {
+    const rows: ReleaseRow[] = await sql`
+      select * from releases
+      where "mediaDeletedAt" is null
+        and status = ${ReleaseProcessingStatus.Published}
+        and "publishedAt" is not null
+        and "publishedAt" < ${cutoff.toISOString()}
+      order by "publishedAt" asc
+    `
+    return rows
+  },
 }

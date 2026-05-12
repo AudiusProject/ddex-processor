@@ -6,7 +6,10 @@ import { cleanupFiles } from './src/cleanupFiles'
 import { releaseRepo, userRepo } from './src/db'
 import { pgMigrate } from './src/db/migrations'
 import { parseDelivery } from './src/parseDelivery'
-import { purgeOldUnpublishedMedia } from './src/purgeOldMedia'
+import {
+  purgeOldPublishedMedia,
+  purgeOldUnpublishedMedia,
+} from './src/purgeOldMedia'
 import {
   DEFAULT_ALBUM_DEAL,
   DEFAULT_TRACK_DEAL,
@@ -308,9 +311,10 @@ program.command('cleanup').description('remove temp files').action(cleanupFiles)
 program
   .command('purge-old-media')
   .description(
-    'Delete S3 media for releases delivered > 6 months ago that never published'
+    'Delete S3 media for releases published > 1 week ago, plus releases delivered > 6 months ago that never published'
   )
   .action(async () => {
+    await purgeOldPublishedMedia()
     await purgeOldUnpublishedMedia()
     process.exit(0)
   })
@@ -332,6 +336,9 @@ async function startWorker() {
     await pollForNewLSRFiles()
     await clmReport()
     await publishValidPendingReleases()
+    await purgeOldPublishedMedia().catch((e) =>
+      console.log('purgeOldPublishedMedia failed', e)
+    )
     await purgeOldUnpublishedMedia().catch((e) =>
       console.log('purgeOldUnpublishedMedia failed', e)
     )

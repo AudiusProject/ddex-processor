@@ -9,7 +9,7 @@ import {
 } from './db'
 import { publogRepo } from './db/publogRepo'
 import { DDEXContributor, DDEXRelease, DDEXResource, DealPayGated } from './parseDelivery'
-import { deleteReleaseMedia, readAssetWithCaching } from './s3poller'
+import { readAssetWithCaching } from './s3poller'
 import { getSdk } from './sdk'
 import { SourceConfig, sources } from './sources'
 import { decodeId } from './util'
@@ -150,10 +150,8 @@ export async function publishRelease(
       publishedAt: new Date().toISOString(),
     })
 
-    // media is now on Audius — drop it from the source S3 bucket to save space
-    await deleteReleaseMedia(releaseRow).catch((e) =>
-      console.log('deleteReleaseMedia failed', releaseRow.key, e)
-    )
+    // media stays in S3 for a grace period after publishing; the
+    // purgeOldPublishedMedia worker routine reclaims it later.
 
     // todo: poll for result to ensure it's actually created
 
@@ -193,10 +191,8 @@ export async function publishRelease(
       publishedAt: new Date().toISOString(),
     })
 
-    // media is now on Audius — drop it from the source S3 bucket to save space
-    await deleteReleaseMedia(releaseRow).catch((e) =>
-      console.log('deleteReleaseMedia failed', releaseRow.key, e)
-    )
+    // media stays in S3 for a grace period after publishing; the
+    // purgeOldPublishedMedia worker routine reclaims it later.
 
     // todo: poll for result to ensure it's actually created
   }

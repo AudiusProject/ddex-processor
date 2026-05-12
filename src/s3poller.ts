@@ -4,7 +4,7 @@ import {
   S3Client,
   S3ClientConfig,
 } from '@aws-sdk/client-s3'
-import { mkdir, readFile, stat, writeFile } from 'fs/promises'
+import { mkdir, readFile, rename, stat, unlink, writeFile } from 'fs/promises'
 import { basename, dirname, join, resolve } from 'path'
 import sharp from 'sharp'
 import { s3markerRepo } from './db'
@@ -239,13 +239,21 @@ export async function readAssetWithCaching(
       ...[cacheBaseDir, Bucket, imageSize, Key].filter(Boolean)
     )
 
-    // fetch if needed
-    const exists = await fileExists(destinationPath)
-    if (!exists) {
+    // fetch if needed. a 0-byte file on disk indicates a prior failed/partial
+    // write and must be treated as a cache miss, otherwise the SDK rejects the
+    // empty buffer with "Audio file has invalid file type".
+    let cached = await fileExists(destinationPath)
+    if (cached) {
+      const st = await stat(destinationPath)
+      if (st.size === 0) cached = false
+    }
+    if (!cached) {
       const source = sources.findByXmlUrl(xmlUrl)
       const s3 = dialS3(source)
       await mkdir(dirname(destinationPath), { recursive: true })
-      const { Body } = await s3.send(new GetObjectCommand({ Bucket, Key }))
+      const { Body, ContentLength } = await s3.send(
+        new GetObjectCommand({ Bucket, Key })
+      )
       const parsedSize = parseInt(imageSize)
       if (parsedSize) {
         try {
@@ -267,7 +275,24 @@ export async function readAssetWithCaching(
           }
         }
       } else {
-        await writeFile(destinationPath, Body as any)
+        // write to a sibling .part file then atomically rename, so a partial
+        // download never poisons the cache for subsequent reads
+        const tmpPath = `${destinationPath}.part`
+        try {
+          await writeFile(tmpPath, Body as any)
+          if (typeof ContentLength === 'number') {
+            const written = (await stat(tmpPath)).size
+            if (written !== ContentLength) {
+              throw new Error(
+                `s3 download size mismatch for ${Bucket}/${Key}: expected ${ContentLength}, got ${written}`
+              )
+            }
+          }
+          await rename(tmpPath, destinationPath)
+        } catch (e) {
+          await unlink(tmpPath).catch(() => {})
+          throw e
+        }
       }
     }
 

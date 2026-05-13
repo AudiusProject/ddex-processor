@@ -1293,18 +1293,30 @@ app.get('/release/:source/:key/:ref/:size?', async (c) => {
     return c.text('Access denied', 403)
   }
 
+  const release = await releaseRepo.get(key)
+
+  // Once a release is published to Audius, Audius is the source of truth —
+  // serve media directly from there regardless of whether S3 still holds a copy.
+  if (release?.entityId) {
+    const isImageRef = release.images.some((i) => i.ref === ref)
+    const url = await audiusMediaUrl(release, ref, isImageRef)
+    if (url) {
+      // cache the redirect so browser reloads don't re-hit the Audius API
+      c.header('Cache-Control', 'max-age=7200')
+      return c.redirect(url, 302)
+    }
+    // published but the Audius lookup failed — render placeholder so the UI
+    // doesn't pretend the asset is still readable from S3
+    if (isImageRef) return brokenImageResponse(c)
+    return c.text('Media no longer available', 410)
+  }
+
   const asset = await assetRepo.get(source, key, ref)
   if (!asset) return c.json({ error: 'not found' }, 404)
 
-  // if media has been reclaimed from S3, fall back to Audius (when published)
-  // or a broken-image placeholder (when never published)
-  const release = await releaseRepo.get(key)
+  // unpublished release whose media was purged → placeholder / 410
   if (release?.mediaDeletedAt) {
     const isImageRef = release.images.some((i) => i.ref === ref)
-    if (release.entityId) {
-      const fallback = await audiusMediaFallbackUrl(release, ref, isImageRef)
-      if (fallback) return c.redirect(fallback, 302)
-    }
     if (isImageRef) return brokenImageResponse(c)
     return c.text('Media no longer available', 410)
   }
@@ -1332,14 +1344,14 @@ app.get('/release/:source/:key/:ref/:size?', async (c) => {
 // pick the closest Audius artwork size to a requested local size like "200"
 function pickAudiusArtworkUrl(artwork: any, size?: string): string | undefined {
   if (!artwork) return
-  const buckets: Array<keyof typeof artwork> = ['150x150', '480x480', '1000x1000']
+  const buckets = ['150x150', '480x480', '1000x1000']
   const target = parseInt(size || '480') || 480
   let best: string | undefined
   let bestDelta = Infinity
   for (const b of buckets) {
     const url = artwork[b]
     if (!url) continue
-    const d = Math.abs(parseInt(String(b)) - target)
+    const d = Math.abs(parseInt(b) - target)
     if (d < bestDelta) {
       bestDelta = d
       best = url
@@ -1348,24 +1360,35 @@ function pickAudiusArtworkUrl(artwork: any, size?: string): string | undefined {
   return best
 }
 
-async function audiusMediaFallbackUrl(
+// Build an Audius URL to serve in place of the S3 asset for a published
+// release. Uses /v1/full/* (the array-shape endpoints already in use elsewhere
+// in this codebase) with ?app_name=ddex so the API accepts the request.
+async function audiusMediaUrl(
   release: ReleaseRow,
   ref: string,
   isImage: boolean
 ): Promise<string | undefined> {
   try {
     if (release.entityType === 'track') {
-      const resp = await fetch(`${API_HOST}/v1/tracks/${release.entityId}`)
-      if (!resp.ok) return
+      const url = `${API_HOST}/v1/full/tracks/${release.entityId}?app_name=ddex`
+      const resp = await fetch(url)
+      if (!resp.ok) {
+        console.log('audiusMediaUrl track lookup failed', release.entityId, resp.status)
+        return
+      }
       const j: any = await resp.json()
-      const track = Array.isArray(j.data) ? j.data[0] : j.data
+      const track = j.data?.[0] ?? j.data
       if (!track) return
       if (isImage) return pickAudiusArtworkUrl(track.artwork)
-      return `${API_HOST}/v1/tracks/${release.entityId}/stream`
+      return `${API_HOST}/v1/tracks/${release.entityId}/stream?app_name=ddex`
     }
     if (release.entityType === 'album') {
-      const resp = await fetch(`${API_HOST}/v1/full/playlists/${release.entityId}`)
-      if (!resp.ok) return
+      const url = `${API_HOST}/v1/full/playlists/${release.entityId}?app_name=ddex`
+      const resp = await fetch(url)
+      if (!resp.ok) {
+        console.log('audiusMediaUrl album lookup failed', release.entityId, resp.status)
+        return
+      }
       const j: any = await resp.json()
       const album = j.data?.[0]
       if (!album) return
@@ -1374,10 +1397,10 @@ async function audiusMediaFallbackUrl(
       if (!sr?.isrc) return
       const match = album.tracks?.find((t: any) => t.isrc && t.isrc === sr.isrc)
       if (!match?.id) return
-      return `${API_HOST}/v1/tracks/${match.id}/stream`
+      return `${API_HOST}/v1/tracks/${match.id}/stream?app_name=ddex`
     }
   } catch (e) {
-    console.log('audiusMediaFallbackUrl failed', release.key, ref, e)
+    console.log('audiusMediaUrl failed', release.key, ref, e)
   }
 }
 

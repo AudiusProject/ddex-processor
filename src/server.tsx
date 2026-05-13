@@ -297,6 +297,11 @@ app.get('/releases', async (c) => {
 
   const showPagination = offset || rows.length == limit
 
+  // For Published rows, fetch Audius artwork (with mirror hosts) up front so
+  // each <img> can be rendered with the full primary+mirrors URL list and
+  // the client-side MirrorImage script can advance on slow/dead nodes.
+  const mirrorUrlsByKey = await batchMirrorUrls(rows, '480x480')
+
   function withQueryParam(k: string, v: any) {
     const u = requestUrl(c)
     u.searchParams.set(k, v)
@@ -422,11 +427,22 @@ app.get('/releases', async (c) => {
             <tr>
               <td style="min-width: 80px; width: 120px;">
                 {row.images?.[0]?.ref ? (
-                  <img
-                    src={`/release/${row.source}/${row.key}/${row.images[0].ref}/200`}
-                    width="80"
-                    height="80"
-                  />
+                  mirrorUrlsByKey.get(row.key)?.length ? (
+                    <img
+                      data-mirror-urls={JSON.stringify(
+                        mirrorUrlsByKey.get(row.key)
+                      )}
+                      width="80"
+                      height="80"
+                      alt=""
+                    />
+                  ) : (
+                    <img
+                      src={`/release/${row.source}/${row.key}/${row.images[0].ref}/200`}
+                      width="80"
+                      height="80"
+                    />
+                  )
                 ) : (
                   <div
                     style={{
@@ -595,6 +611,12 @@ app.get('/releases/:key', async (c) => {
     ? publishableUsers.find((u) => u.id == parsedRelease.audiusUser)
     : undefined
 
+  // For Published releases, pull the Audius artwork with mirror hosts so the
+  // detail page <img> can fall back through mirrors when a node is unresponsive.
+  const detailMirrorUrls = row.entityId
+    ? buildMirrorUrls(await getAudiusArtwork(row), '480x480')
+    : []
+
   const mapArtist = (section: string) => (c: DDEXContributor) =>
     html`<tr>
       <td>${searchLink(c.name)}</td>
@@ -618,15 +640,28 @@ app.get('/releases/:key', async (c) => {
 
         <div style={{ display: 'flex', gap: '20px' }}>
           <div>
-            <img
-              src={`/release/${row.source}/${row.key}/${parsedRelease.images[0]?.ref}/200`}
-              style={{
-                width: '200px',
-                height: '200px',
-                display: 'block',
-                marginBottom: '10px',
-              }}
-            />
+            {detailMirrorUrls.length ? (
+              <img
+                data-mirror-urls={JSON.stringify(detailMirrorUrls)}
+                alt=""
+                style={{
+                  width: '200px',
+                  height: '200px',
+                  display: 'block',
+                  marginBottom: '10px',
+                }}
+              />
+            ) : (
+              <img
+                src={`/release/${row.source}/${row.key}/${parsedRelease.images[0]?.ref}/200`}
+                style={{
+                  width: '200px',
+                  height: '200px',
+                  display: 'block',
+                  marginBottom: '10px',
+                }}
+              />
+            )}
 
             <table style={{ width: '100%', fontSize: '90%' }} class="compact">
               {infoRowLink('Source', row.source)}
@@ -1358,6 +1393,79 @@ function pickAudiusArtworkUrl(artwork: any, size?: string): string | undefined {
     }
   }
   return best
+}
+
+// Audius artwork comes back as `{ '150x150': url, '480x480': url, '1000x1000':
+// url, mirrors: [host, host, ...] }`. The browser will stall indefinitely on
+// a slow/dead content node because `onerror` only fires on hard failures, so
+// we build a full primary-then-mirrors URL list that the client can try in
+// sequence with a per-URL timeout.
+function buildMirrorUrls(artwork: any, size: string = '480x480'): string[] {
+  if (!artwork) return []
+  const primary = artwork[size] || artwork['480x480'] || artwork['150x150']
+  if (!primary) return []
+  const mirrors: string[] = Array.isArray(artwork.mirrors) ? artwork.mirrors : []
+  if (!mirrors.length) return [primary]
+  let path: string
+  try {
+    path = new URL(primary).pathname
+  } catch {
+    return [primary]
+  }
+  return [primary, ...mirrors.map((root: string) => root.replace(/\/$/, '') + path)]
+}
+
+// In-memory cache for Audius artwork objects so a page render doesn't issue
+// one API call per row on every refresh. CIDs are stable, so a long TTL is
+// safe; we still poke through after 1h in case mirror lists change.
+const artworkCache = new Map<
+  string,
+  { artwork: any; cachedAt: number }
+>()
+const ARTWORK_CACHE_TTL_MS = 60 * 60 * 1000
+
+async function getAudiusArtwork(release: ReleaseRow): Promise<any | undefined> {
+  if (!release.entityId || !release.entityType) return
+  const cacheKey = `${release.entityType}:${release.entityId}`
+  const hit = artworkCache.get(cacheKey)
+  if (hit && Date.now() - hit.cachedAt < ARTWORK_CACHE_TTL_MS) return hit.artwork
+
+  try {
+    const endpoint =
+      release.entityType === 'track'
+        ? `${API_HOST}/v1/full/tracks/${release.entityId}?app_name=ddex`
+        : `${API_HOST}/v1/full/playlists/${release.entityId}?app_name=ddex`
+    const resp = await fetch(endpoint)
+    if (!resp.ok) {
+      console.log('getAudiusArtwork lookup failed', release.entityId, resp.status)
+      return
+    }
+    const j: any = await resp.json()
+    const entity = j.data?.[0] ?? j.data
+    const artwork = entity?.artwork
+    if (artwork) artworkCache.set(cacheKey, { artwork, cachedAt: Date.now() })
+    return artwork
+  } catch (e) {
+    console.log('getAudiusArtwork failed', release.key, e)
+  }
+}
+
+// Batch artwork lookups for a page of releases. Returns a map keyed by
+// release.key → urls[]. Releases without an entityId are skipped.
+async function batchMirrorUrls(
+  releases: ReleaseRow[],
+  size: string = '480x480'
+): Promise<Map<string, string[]>> {
+  const published = releases.filter((r) => r.entityId)
+  const artworks = await Promise.all(
+    published.map((r) => getAudiusArtwork(r))
+  )
+  const out = new Map<string, string[]>()
+  for (let i = 0; i < published.length; i++) {
+    const urls = buildMirrorUrls(artworks[i], size)
+    if (urls.length) out.set(published[i].key, urls)
+  }
+  return out
 }
 
 // Build an Audius URL to serve in place of the S3 asset for a published

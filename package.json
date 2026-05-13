@@ -17,6 +17,9 @@
   },
   "keywords": [],
   "author": "Audius",
+  "engines": {
+    "npm": ">=11.10.0"
+  },
   "dependencies": {
     "@audius/hedgehog": "3.0.0-alpha.1",
     "@audius/sdk": "9.0.0",

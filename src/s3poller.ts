@@ -178,7 +178,13 @@ async function processS3Contents(
     const xml = await Body?.transformToString()
     if (xml) {
       console.log('parsing', xmlUrl)
-      const releases = (await parseDdexXml(source, xmlUrl, xml)) || []
+      try {
+        await parseDdexXml(source, xmlUrl, xml)
+      } catch (e) {
+        // Don't let one malformed XML kill the worker — log and move on.
+        // The error has already been logged inside parseDdexXml.
+        console.error('skipping unparseable XML', xmlUrl, e)
+      }
     }
   }
 }

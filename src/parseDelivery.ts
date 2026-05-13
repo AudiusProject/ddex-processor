@@ -963,7 +963,13 @@ async function parseReleaseXml(
 
 function parsePurgeXml($: cheerio.CheerioAPI): DDEXPurgeRelease {
   // todo: is it possible multiple releases purged in one message?
-  const releaseIds = parseReleaseIds($('PurgedRelease').first())
+  // ERN spec uses <PurgeRelease> inside <PurgeReleaseList>; legacy code
+  // looked for <PurgedRelease> which doesn't exist — fall back to it for
+  // safety.
+  const $purge = $('PurgeRelease').first().length
+    ? $('PurgeRelease').first()
+    : $('PurgedRelease').first()
+  const releaseIds = parseReleaseIds($purge)
   return { releaseIds }
 }
 

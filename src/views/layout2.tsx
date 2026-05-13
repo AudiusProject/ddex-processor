@@ -899,6 +899,78 @@ export function Layout2({
               })
           })()
         </script>
+
+        <!--
+          MirrorImage: <img data-mirror-urls='["url1","url2",...]'> tries each
+          URL in order with a 3s per-URL timeout, advancing on timeout or hard
+          error. Necessary because dead/slow Audius content nodes accept the
+          TCP connection but never send data, so the browser stalls until its
+          default 60–90s timeout and onerror never fires.
+        -->
+        <script>
+          ;(function () {
+            var TIMEOUT_MS = 3000
+            var FALLBACK =
+              'data:image/svg+xml;utf8,' +
+              encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="No media">' +
+                  '<rect width="200" height="200" fill="#e9e3ff"/>' +
+                  '<g stroke="#7f6ad6" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round">' +
+                  '<rect x="40" y="50" width="120" height="100" rx="8"/>' +
+                  '<circle cx="75" cy="85" r="10"/>' +
+                  '<path d="M48 138 L88 100 L120 130 L142 110 L152 122"/>' +
+                  '<path d="M58 50 L142 150" stroke="#f94d62"/>' +
+                  '</g>' +
+                  '<text x="100" y="178" font-family="DM Sans,system-ui,sans-serif" font-size="14" fill="#4a5263" text-anchor="middle">No media</text>' +
+                  '</svg>'
+              )
+
+            function wire(img) {
+              var raw = img.getAttribute('data-mirror-urls') || '[]'
+              var urls
+              try {
+                urls = JSON.parse(raw)
+              } catch (e) {
+                urls = []
+              }
+              if (!Array.isArray(urls) || !urls.length) {
+                img.src = FALLBACK
+                return
+              }
+              var idx = 0
+              var timer = null
+              function settle() {
+                if (timer) {
+                  clearTimeout(timer)
+                  timer = null
+                }
+              }
+              function tryNext() {
+                settle()
+                if (idx >= urls.length) {
+                  img.src = FALLBACK
+                  return
+                }
+                img.src = urls[idx]
+                timer = setTimeout(function () {
+                  idx++
+                  tryNext()
+                }, TIMEOUT_MS)
+              }
+              img.addEventListener('load', settle)
+              img.addEventListener('error', function () {
+                settle()
+                idx++
+                tryNext()
+              })
+              tryNext()
+            }
+
+            document
+              .querySelectorAll('img[data-mirror-urls]')
+              .forEach(wire)
+          })()
+        </script>
       </body>
     </html>`
 }

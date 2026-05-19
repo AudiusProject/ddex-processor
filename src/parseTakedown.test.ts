@@ -111,4 +111,27 @@ test('crud', async () => {
     expect(rr.soundRecordings[0].title).toBe('Updated Example Song')
     expect(rr.status).toBe(ReleaseProcessingStatus.DeletePending)
   }
+
+  // ----------------
+  // re-delivery after a completed takedown:
+  // a NewReleaseMessage for a Deleted release must reset for re-publish,
+  // not get treated as a takedown again.
+  await releaseRepo.update({
+    key: grid,
+    status: ReleaseProcessingStatus.Deleted,
+    entityType: 'track',
+    entityId: 't1',
+    publishedAt: new Date().toISOString(),
+  })
+
+  {
+    await parseDdexXmlFile(source, 'fixtures/01_delivery.xml')
+    const rr = (await releaseRepo.get(grid))!
+    // status should advance to PublishPending, not bounce back to DeletePending
+    expect(rr.status).toBe(ReleaseProcessingStatus.PublishPending)
+    // stale entity pointers must be cleared so the worker takes the create path
+    expect(rr.entityId).toBeFalsy()
+    expect(rr.entityType).toBeFalsy()
+    expect(rr.publishedAt).toBeFalsy()
+  }
 })

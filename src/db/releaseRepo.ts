@@ -131,13 +131,16 @@ export const releaseRepo = {
       return
     }
 
+    const priorWasDeleted = prior?.status == ReleaseProcessingStatus.Deleted
+
     let status: ReleaseRow['status'] = release.problems.length
       ? ReleaseProcessingStatus.Blocked
       : ReleaseProcessingStatus.PublishPending
 
     // if prior is published and latest version has no deal,
-    // treat as takedown
-    if (prior?.entityId && release.deals.length == 0) {
+    // treat as takedown. Skip when prior was already deleted — a
+    // re-delivery for a deleted release should re-publish, not re-delete.
+    if (!priorWasDeleted && prior?.entityId && release.deals.length == 0) {
       status = ReleaseProcessingStatus.DeletePending
     }
 
@@ -167,6 +170,25 @@ export const releaseRepo = {
     } as Partial<ReleaseRow>
 
     await pgUpsert('releases', 'key', omitEmpty(data))
+
+    // Re-delivery for a previously deleted release: clear stale fields
+    // that point at the now-deleted Audius entity, so the publisher takes
+    // the create path instead of trying to update or re-delete it.
+    // pgUpsert/omitEmpty can't write nulls, so do this as an explicit update.
+    if (priorWasDeleted) {
+      await sql`
+        update releases set
+          "entityId" = null,
+          "entityType" = null,
+          "blockHash" = null,
+          "blockNumber" = null,
+          "publishedAt" = null,
+          "mediaDeletedAt" = null,
+          "publishErrorCount" = 0,
+          "lastPublishError" = null
+        where "key" = ${key}
+      `
+    }
   },
 
   async markPrependArtist(key: string, prependArtist: boolean) {

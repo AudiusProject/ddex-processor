@@ -87,11 +87,13 @@ test('crud', async () => {
     expect(rr.status).toBe(ReleaseProcessingStatus.Deleted)
   }
 
-  // re-load 03 delete...
+  // re-load 03 delete — stale purge (same messageTimestamp as prior) must
+  // be ignored, otherwise a rescanAll-style replay would undo a later
+  // re-delivery and re-purge a freshly published release.
   {
     await parseDdexXmlFile(source, 'fixtures/03_delete.xml')
     const rr = (await releaseRepo.get(grid))!
-    expect(rr.status).toBe(ReleaseProcessingStatus.DeletePending)
+    expect(rr.status).toBe(ReleaseProcessingStatus.Deleted)
   }
 
   // ----------------
@@ -115,13 +117,15 @@ test('crud', async () => {
   // ----------------
   // re-delivery after a completed takedown:
   // a NewReleaseMessage for a Deleted release must reset for re-publish,
-  // not get treated as a takedown again.
+  // not get treated as a takedown again. Roll messageTimestamp back so
+  // 01_delivery's timestamp is treated as "newer".
   await releaseRepo.update({
     key: grid,
     status: ReleaseProcessingStatus.Deleted,
     entityType: 'track',
     entityId: 't1',
     publishedAt: new Date().toISOString(),
+    messageTimestamp: '2020-01-01T00:00:00Z',
   })
 
   {
@@ -133,5 +137,27 @@ test('crud', async () => {
     expect(rr.entityId).toBeFalsy()
     expect(rr.entityType).toBeFalsy()
     expect(rr.publishedAt).toBeFalsy()
+  }
+
+  // ----------------
+  // stale-purge replay after a re-delivery:
+  // an S3 rescan re-parses the old PurgeReleaseMessage (older
+  // messageTimestamp than the row's current one). It must not flip status
+  // back to DeletePending — that would re-delete the freshly published
+  // entity.
+  await releaseRepo.update({
+    key: grid,
+    status: ReleaseProcessingStatus.Published,
+    entityType: 'track',
+    entityId: 't2',
+    publishedAt: new Date().toISOString(),
+    messageTimestamp: '2099-01-01T00:00:00Z',
+  })
+
+  {
+    await parseDdexXmlFile(source, 'fixtures/03_delete.xml')
+    const rr = (await releaseRepo.get(grid))!
+    expect(rr.status).toBe(ReleaseProcessingStatus.Published)
+    expect(rr.entityId).toBe('t2')
   }
 })

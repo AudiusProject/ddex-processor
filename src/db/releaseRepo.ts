@@ -232,6 +232,17 @@ export const releaseRepo = {
       return
     }
 
+    // Drop stale purges: if the row already has a newer message (e.g. a
+    // re-delivery NewReleaseMessage arrived after this purge was written),
+    // ignore the purge. Otherwise rescanAll-style re-parsing of an old
+    // PurgeReleaseMessage will undo a fresh publish.
+    if (prior.messageTimestamp >= messageTimestamp) {
+      console.log(
+        `skipping purge ${xmlUrl} because ${key} has a newer message`
+      )
+      return
+    }
+
     await releaseRepo.update({
       key,
       status: ReleaseProcessingStatus.DeletePending,

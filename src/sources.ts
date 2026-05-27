@@ -33,6 +33,8 @@ export type SourceConfig = BucketConfig & {
   acknowledgementServerUsername?: string
   acknowledgementServerPassword?: string
   rescanAll?: boolean
+  lateXmlScanIntervalMinutes?: number
+  lateXmlInitialLookbackDays?: number
 }
 
 let sourcesFile: SourcesFile

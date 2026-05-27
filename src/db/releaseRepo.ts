@@ -107,6 +107,20 @@ export const releaseRepo = {
     return row as ReleaseRow
   },
 
+  async findByReleaseIds(releaseIds: DDEXReleaseIds) {
+    const entries = Object.entries(releaseIds).filter(([, value]) => value)
+
+    for (const [field, value] of entries) {
+      const rows: ReleaseRow[] = await sql`
+        select * from releases
+        where "releaseIds" ->> ${field} = ${value}
+        order by "messageTimestamp" desc
+        limit 1
+      `
+      if (rows[0]) return rows[0]
+    }
+  },
+
   async update(r: Partial<ReleaseRow>) {
     await pgUpdate('releases', 'key', r)
   },
@@ -221,11 +235,13 @@ export const releaseRepo = {
     messageTimestamp: string,
     releaseIds: DDEXReleaseIds
   ) {
-    // here we do PK lookup using the "best" id
-    // but we may need to try to find by all the different releaseIds
-    // if it's not consistent
+    // Try the primary key first, then fall back to any stored releaseId. Some
+    // distributors use different identifiers in purge messages than they used
+    // for the original release delivery.
     const key = releaseRepo.chooseReleaseId(releaseIds)
-    const prior = await releaseRepo.get(key)
+    const prior =
+      (await releaseRepo.get(key)) ||
+      (await releaseRepo.findByReleaseIds(releaseIds))
 
     if (!prior) {
       console.log(`got purge release but no prior ${key}`)
@@ -236,15 +252,19 @@ export const releaseRepo = {
     // re-delivery NewReleaseMessage arrived after this purge was written),
     // ignore the purge. Otherwise rescanAll-style re-parsing of an old
     // PurgeReleaseMessage will undo a fresh publish.
-    if (prior.messageTimestamp >= messageTimestamp) {
+    if (
+      prior.messageTimestamp > messageTimestamp ||
+      (prior.messageTimestamp == messageTimestamp &&
+        prior.status == ReleaseProcessingStatus.Deleted)
+    ) {
       console.log(
-        `skipping purge ${xmlUrl} because ${key} has a newer message`
+        `skipping purge ${xmlUrl} because ${prior.key} has a newer message`
       )
       return
     }
 
     await releaseRepo.update({
-      key,
+      key: prior.key,
       status: ReleaseProcessingStatus.DeletePending,
       source,
       xmlUrl,

@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from 'vitest'
 
 import { ReleaseProcessingStatus, releaseRepo, userRepo } from './db'
 import { pgMigrate } from './db/migrations'
-import { parseDdexXmlFile } from './parseDelivery'
+import { parseDdexXmlFile, type DDEXRelease } from './parseDelivery'
 import { sources } from './sources'
 
 beforeAll(async () => {
@@ -96,6 +96,22 @@ test('crud', async () => {
     expect(rr.status).toBe(ReleaseProcessingStatus.Deleted)
   }
 
+  // A same-timestamp purge should still delete a published row. The same
+  // timestamp only means stale when the release was already deleted.
+  await releaseRepo.update({
+    key: grid,
+    status: ReleaseProcessingStatus.Published,
+    entityType: 'track',
+    entityId: 't-same-timestamp',
+    messageTimestamp: '2024-04-02T07:00:00Z',
+  })
+
+  {
+    await parseDdexXmlFile(source, 'fixtures/03_delete.xml')
+    const rr = (await releaseRepo.get(grid))!
+    expect(rr.status).toBe(ReleaseProcessingStatus.DeletePending)
+  }
+
   // ----------------
   // no deal as takedown:
   // track is in a published state
@@ -160,4 +176,56 @@ test('crud', async () => {
     expect(rr.status).toBe(ReleaseProcessingStatus.Published)
     expect(rr.entityId).toBe('t2')
   }
+})
+
+test('purge can match a release by a non-key release id', async () => {
+  const source = 'crudTest'
+  const upc = '000000000123'
+  const grid = 'GRIDALT0000000000000000000000000000000000'
+
+  const release: DDEXRelease = {
+    ref: 'R1',
+    title: 'Alternate ID Album',
+    genre: 'Folk',
+    subGenre: 'Indie Folk',
+    releaseDate: '2024-01-01',
+    releaseType: 'Album',
+    releaseIds: {
+      icpn: upc,
+      grid,
+    },
+    isMainRelease: true,
+    problems: [],
+    soundRecordings: [],
+    images: [],
+    deals: [],
+    artists: [{ name: 'DJ Theo', role: 'MainArtist' }],
+    contributors: [],
+    indirectContributors: [],
+    labelName: 'Iron Crown Music',
+  }
+
+  await releaseRepo.upsert(
+    source,
+    'fixtures/alternate_id_delivery.xml',
+    '2024-01-01T00:00:00Z',
+    release
+  )
+  await releaseRepo.update({
+    key: upc,
+    status: ReleaseProcessingStatus.Published,
+    entityType: 'album',
+    entityId: 'album-alt-id',
+  })
+
+  await releaseRepo.markForDelete(
+    source,
+    'fixtures/alternate_id_purge.xml',
+    '2024-01-02T00:00:00Z',
+    { grid }
+  )
+
+  const rr = (await releaseRepo.get(upc))!
+  expect(rr.status).toBe(ReleaseProcessingStatus.DeletePending)
+  expect(rr.xmlUrl).toBe('fixtures/alternate_id_purge.xml')
 })

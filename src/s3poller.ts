@@ -2,6 +2,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   ListObjectsCommand,
+  ListObjectsV2Command,
   S3Client,
   S3ClientConfig,
 } from '@aws-sdk/client-s3'
@@ -13,6 +14,9 @@ import { parseDdexXml } from './parseDelivery'
 import { BucketConfig, SourceConfig, sources } from './sources'
 
 type AccessKey = string
+
+const DEFAULT_RELEASES_LATE_XML_SCAN_INTERVAL_MINUTES = 60
+const DEFAULT_RELEASES_LATE_XML_INITIAL_LOOKBACK_DAYS = 7
 
 const s3clients: Record<AccessKey, S3Client> = {}
 
@@ -151,6 +155,90 @@ export async function pollS3Source(
     const existingMarker = await s3markerRepo.get(bucket)
     await s3markerRepo.upsert(bucket, existingMarker, undefined, maxLastModified)
   }
+
+  if (!sourceConfig.rescanAll && listingPrefix === 'releases/') {
+    await scanLateXmlFiles(sourceConfig, client, bucket, listingPrefix)
+  }
+}
+
+async function scanLateXmlFiles(
+  sourceConfig: SourceConfig,
+  client: S3Client,
+  bucket: string,
+  prefix: string
+) {
+  const intervalMinutes =
+    sourceConfig.lateXmlScanIntervalMinutes ??
+    DEFAULT_RELEASES_LATE_XML_SCAN_INTERVAL_MINUTES
+  if (intervalMinutes <= 0) return
+
+  const markerKey = `${bucket}:late_xml_scan`
+  const lastScan = await s3markerRepo.get(markerKey)
+  const lastScanAt = lastScan ? new Date(lastScan) : null
+
+  if (
+    lastScanAt &&
+    Date.now() - lastScanAt.getTime() < intervalMinutes * 60 * 1000
+  ) {
+    return
+  }
+
+  const initialLookbackDays =
+    sourceConfig.lateXmlInitialLookbackDays ??
+    DEFAULT_RELEASES_LATE_XML_INITIAL_LOOKBACK_DAYS
+  const lastModified =
+    (await s3markerRepo.getLastModified(markerKey)) ||
+    new Date(Date.now() - initialLookbackDays * 24 * 60 * 60 * 1000)
+  let maxLastModified = lastModified
+  let continuationToken: string | undefined
+  let pageCount = 0
+
+  do {
+    const result = await client.send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      })
+    )
+    const contents = result.Contents || []
+    const changedXml = contents.filter((c) => {
+      const lowerKey = c.Key?.toLowerCase() || ''
+      return (
+        lowerKey.endsWith('.xml') &&
+        !lowerKey.includes('batchcomplete') &&
+        (!lastModified || (c.LastModified && c.LastModified > lastModified))
+      )
+    })
+
+    pageCount++
+    console.log(
+      `late xml scan ${bucket} page=${pageCount} got ${contents.length} files, ${changedXml.length} changed xml files`
+    )
+
+    await processS3Contents(sourceConfig.name, client, bucket, changedXml)
+
+    for (const c of contents) {
+      const lowerKey = c.Key?.toLowerCase() || ''
+      if (
+        lowerKey.endsWith('.xml') &&
+        !lowerKey.includes('batchcomplete') &&
+        c.LastModified &&
+        (!maxLastModified || c.LastModified > maxLastModified)
+      ) {
+        maxLastModified = c.LastModified
+      }
+    }
+
+    continuationToken = result.NextContinuationToken
+  } while (continuationToken)
+
+  await s3markerRepo.upsert(
+    markerKey,
+    new Date().toISOString(),
+    undefined,
+    maxLastModified
+  )
 }
 
 // Helper function to process S3 objects (XML files)

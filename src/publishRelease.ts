@@ -54,8 +54,12 @@ export async function publishValidPendingReleases() {
     const parsed = row
 
     if (row.status == ReleaseProcessingStatus.DeletePending) {
-      // delete
-      deleteRelease(source, row)
+      try {
+        await deleteRelease(source, row)
+      } catch (e: any) {
+        console.log('failed to delete', row.key, e)
+        await releaseRepo.addPublishError(row.key, e)
+      }
     } else if (row.entityId) {
       // update
       if (row.entityType == 'track') {
@@ -403,6 +407,7 @@ export async function deleteRelease(source: SourceConfig, r: ReleaseRow) {
     })
     return onDeleted(result)
   } else if (r.entityType == 'album') {
+    await deleteAlbumTracks(source, sdk, entityId, userId)
     const result = await sdk.albums.deleteAlbum({
       albumId: entityId,
       userId,
@@ -419,6 +424,48 @@ export async function deleteRelease(source: SourceConfig, r: ReleaseRow) {
     })
     return result
   }
+}
+
+export async function deleteAlbumTracks(
+  source: SourceConfig,
+  sdk: ReturnType<typeof getSdk>,
+  albumId: string,
+  userId: string
+) {
+  const trackIds = await fetchAlbumTrackIds(source, albumId)
+
+  for (const trackId of trackIds) {
+    console.log('delete album track', trackId)
+    await sdk.tracks.deleteTrack({
+      trackId,
+      userId,
+    })
+  }
+}
+
+export async function fetchAlbumTrackIds(
+  source: SourceConfig,
+  albumId: string
+) {
+  const apiHost =
+    source.env === 'production'
+      ? 'https://api.audius.co'
+      : 'https://api.staging.audius.co'
+  const resp = await fetch(`${apiHost}/v1/full/playlists/${albumId}`, {
+    headers: { accept: 'application/json' },
+  })
+
+  if (!resp.ok) {
+    throw new Error(`failed to fetch album ${albumId}: ${resp.status}`)
+  }
+
+  const json = await resp.json()
+  const album = json.data?.[0]
+  if (!album) {
+    throw new Error(`failed to fetch album ${albumId}: no album returned`)
+  }
+
+  return (album.tracks || []).map((track: any) => track.id).filter(Boolean)
 }
 
 export function prepareAlbumMetadata(

@@ -86,6 +86,14 @@ UPDATE "s3markers" SET listing_prefix = 'releases/' WHERE bucket = 'ddex-prod-on
 
 The poller uses marker-based incremental polling: each poll continues from the saved marker, processes a page, and saves progress. New releases that sort after the marker are picked up on subsequent polls.
 
+For buckets using the `releases/<id>/` layout, a distributor can add a later
+`purge.xml` inside an existing release folder. That file may sort behind the
+normal marker, so the worker also does a throttled late-XML metadata scan. By
+default it runs every 60 minutes and only fetches XML newer than the stored
+late-scan high-water mark. On first run, it looks back 7 days. Tune this per
+source with `lateXmlScanIntervalMinutes` and `lateXmlInitialLookbackDays`; set
+`lateXmlScanIntervalMinutes` to `0` to disable it for very large buckets.
+
 If you want to delete the state and re-crawl from the start
 
 ```bash

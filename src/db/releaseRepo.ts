@@ -284,6 +284,18 @@ export const releaseRepo = {
     `
   },
 
+  async addPublishBlock(key: string, err: Error) {
+    const status = ReleaseProcessingStatus.Blocked
+    const errText = err.stack || err.toString()
+    await sql`
+      update releases set
+        status=${status},
+        "lastPublishError"=${errText},
+        "publishErrorCount" = "publishErrorCount" + 1
+      where "key" = ${key}
+    `
+  },
+
   async clearPublishError(key: string) {
     await sql`
       update releases set

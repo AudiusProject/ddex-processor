@@ -10,6 +10,16 @@ import { encodeId } from '../util'
 import { WalletManager } from '@audius/hedgehog'
 import { generateRecoveryInfo, getHedgehog } from './hedgehog'
 
+export class ClaimableHandleRequiredError extends Error {
+  constructor(artistName: string) {
+    super(
+      `ClaimableHandleRequired: artist name '${artistName}' does not produce a valid Audius handle. ` +
+        `Set audiusHandle in the UI to publish under a unique ASCII handle.`
+    )
+    this.name = 'ClaimableHandleRequiredError'
+  }
+}
+
 export async function publishToClaimableAccount(releaseId: string) {
   const releaseRow = await releaseRepo.get(releaseId)
   const release = releaseRow
@@ -31,8 +41,10 @@ export async function publishToClaimableAccount(releaseId: string) {
   // releaseRow.audiusHandle is an admin override set in the UI when the
   // default-derived handle collides with an existing audius user. When set,
   // we trust it and bypass the per-row regex stripping.
-  const handle =
-    releaseRow.audiusHandle || artistName.replace(/[^a-zA-Z0-9.]/g, '')
+  const handle = releaseRow.audiusHandle || defaultClaimableHandle(artistName)
+  if (!handle) {
+    throw new ClaimableHandleRequiredError(artistName)
+  }
 
   // read image asset file
   async function resolveFile({ ref }: DDEXResource) {
@@ -149,6 +161,11 @@ export async function publishToClaimableAccount(releaseId: string) {
   )
 
   await publishRelease(source!, releaseRow, release)
+}
+
+export function defaultClaimableHandle(artistName: string) {
+  const fromArtist = artistName.replace(/[^a-zA-Z0-9.]/g, '')
+  return fromArtist || undefined
 }
 
 /**

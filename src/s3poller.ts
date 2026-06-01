@@ -7,7 +7,7 @@ import {
   S3ClientConfig,
 } from '@aws-sdk/client-s3'
 import { mkdir, readFile, rename, rm, stat, unlink, writeFile } from 'fs/promises'
-import { basename, dirname, join, resolve } from 'path'
+import { basename, dirname, join, posix as pathPosix, resolve } from 'path'
 import sharp from 'sharp'
 import { assetRepo, ReleaseRow, releaseRepo, s3markerRepo } from './db'
 import { parseDdexXml } from './parseDelivery'
@@ -327,9 +327,10 @@ export async function readAssetWithCaching(
   // read from s3 + cache to local disk
   if (xmlUrl.startsWith('s3:')) {
     const cacheBaseDir = `/tmp/ddex_cache`
-    const s3url = new URL(pathPart, xmlUrl)
-    const Bucket = s3url.host
-    const Key = decodeURIComponent(s3url.pathname.substring(1))
+    const { bucket: Bucket, key: Key } = resolveS3AssetLocation(
+      xmlUrl,
+      pathPart
+    )
     const destinationPath = join(
       ...[cacheBaseDir, Bucket, imageSize, Key].filter(Boolean)
     )
@@ -401,7 +402,7 @@ export async function readAssetWithCaching(
   }
 
   // read from local disk
-  const fileUrl = resolve(xmlUrl, '..', pathPart)
+  const fileUrl = resolve(xmlUrl, '..', decodeDdexUriPath(pathPart))
   return readFileToBuffer(fileUrl)
 }
 
@@ -427,6 +428,29 @@ export function parseS3Url(s3Url: string): { bucket: string; key: string } {
   return { bucket: match[1], key: match[2] }
 }
 
+export function decodeDdexUriPath(path: string) {
+  return path.replace(/(?:%[0-9A-Fa-f]{2})+/g, (encodedBytes) => {
+    const bytes = encodedBytes
+      .match(/%[0-9A-Fa-f]{2}/g)!
+      .map((byte) => parseInt(byte.slice(1), 16))
+    return new TextDecoder().decode(Uint8Array.from(bytes))
+  })
+}
+
+export function resolveS3AssetLocation(
+  xmlUrl: string,
+  assetPath: string
+): { bucket: string; key: string } {
+  const { bucket, key: xmlKey } = parseS3Url(xmlUrl)
+  const xmlDir = pathPosix.dirname(decodeDdexUriPath(xmlKey))
+  const normalizedAssetPath = decodeDdexUriPath(assetPath).replace(/^\/+/, '')
+  const key =
+    xmlDir === '.'
+      ? pathPosix.normalize(normalizedAssetPath)
+      : pathPosix.join(xmlDir, normalizedAssetPath)
+  return { bucket, key }
+}
+
 // Delete all S3 media (images + sound recordings) for a release, clear local
 // /tmp cache copies, and mark the release as mediaDeletedAt = now.
 // Safe to call repeatedly: missing assets / S3 keys are tolerated.
@@ -446,9 +470,10 @@ export async function deleteReleaseMedia(release: ReleaseRow) {
     const pathPart = asset.filePath
       ? `${asset.filePath}${asset.fileName}`
       : asset.fileName
-    const s3url = new URL(pathPart, asset.xmlUrl)
-    const Bucket = s3url.host
-    const Key = decodeURIComponent(s3url.pathname.substring(1))
+    const { bucket: Bucket, key: Key } = resolveS3AssetLocation(
+      asset.xmlUrl,
+      pathPart
+    )
 
     try {
       const source = sources.findByXmlUrl(asset.xmlUrl)

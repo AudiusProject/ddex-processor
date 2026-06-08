@@ -6,7 +6,7 @@ import { DDEXResource } from '../parseDelivery'
 import { publishRelease } from '../publishRelease'
 import { readAssetWithCaching } from '../s3poller'
 import { sources } from '../sources'
-import { encodeId } from '../util'
+import { encodeId, lowerAscii } from '../util'
 import { WalletManager } from '@audius/hedgehog'
 import { generateRecoveryInfo, getHedgehog } from './hedgehog'
 
@@ -18,6 +18,22 @@ export class ClaimableHandleRequiredError extends Error {
     )
     this.name = 'ClaimableHandleRequiredError'
   }
+}
+
+export class ClaimableRecoveryRequiredError extends Error {
+  constructor() {
+    super(
+      'ClaimableRecoveryRequired: an existing remote claimable account matches this release, ' +
+        'but the source app grant is missing. Restore the grant or link the user before retrying.'
+    )
+    this.name = 'ClaimableRecoveryRequiredError'
+  }
+}
+
+type DiscoveryUser = {
+  encodedUserId: string
+  handle: string
+  name: string
 }
 
 export async function publishToClaimableAccount(releaseId: string) {
@@ -63,12 +79,34 @@ export async function publishToClaimableAccount(releaseId: string) {
   // if not found, create a claimable account
   let encodedUserId = await userRepo.match(source.ddexKey, [artistName])
   if (!encodedUserId) {
-    // Refuse to signUp if the handle is already claimed on Audius — that
-    // produces an orphaned identity row with no audius user (createUser fails
-    // downstream because the handle is taken). Admin can set audiusHandle in
-    // the UI to publish under a different handle.
-    await assertHandleAvailable(handle, source.env || 'staging')
+    const existingUser = await lookupUserByHandle(
+      handle,
+      source.env || 'staging'
+    )
+    if (existingUser) {
+      const grantedUser = await lookupGrantedUserByHandle(
+        source.ddexKey,
+        handle,
+        source.env || 'staging'
+      )
+      if (grantedUser?.encodedUserId === existingUser.encodedUserId) {
+        encodedUserId = existingUser.encodedUserId
+        await userRepo.upsert({
+          id: encodedUserId,
+          apiKey: source.ddexKey,
+          handle: existingUser.handle,
+          name: existingUser.name,
+          createdAt: new Date(),
+        })
+      } else if (lowerAscii(existingUser.name) === lowerAscii(artistName)) {
+        throw new ClaimableRecoveryRequiredError()
+      } else {
+        throw handleClaimedError(handle, source.env || 'staging')
+      }
+    }
+  }
 
+  if (!encodedUserId) {
     // no user: create claimable user
     console.log(`=== creating claimable account for ${artistName}`)
     const hedgehog = getHedgehog()
@@ -168,12 +206,10 @@ export function defaultClaimableHandle(artistName: string) {
   return fromArtist || undefined
 }
 
-/**
- * Throws HandleClaimed if a discovery user already exists with this handle.
- * Caller's error gets surfaced as the release's lastPublishError, prompting
- * the admin to set an audiusHandle override in the UI.
- */
-async function assertHandleAvailable(handle: string, env: string) {
+async function lookupUserByHandle(
+  handle: string,
+  env: string
+): Promise<DiscoveryUser | undefined> {
   const apiHost =
     env === 'production'
       ? 'https://api.audius.co'
@@ -187,11 +223,62 @@ async function assertHandleAvailable(handle: string, env: string) {
       `discovery handle check failed for ${handle}: HTTP ${res.status}`
     )
   }
+  const payload = await res.json()
+  const user = Array.isArray(payload.data) ? payload.data[0] : payload.data
+  if (!user) return
+  return {
+    encodedUserId: encodeId(user.id || user.user_id),
+    handle: user.handle || handle,
+    name: user.name || '',
+  }
+}
+
+async function lookupGrantedUserByHandle(
+  ddexKey: string,
+  handle: string,
+  env: string
+): Promise<DiscoveryUser | undefined> {
+  const apiHost =
+    env === 'production'
+      ? 'https://api.audius.co'
+      : 'https://api.staging.audius.co'
+  const address = ddexKey.replace(/^0x/, '')
+  const normalizedHandle = lowerAscii(handle)
+  const pageSize = 100
+
+  for (let offset = 0; ; offset += pageSize) {
+    const res = await fetch(
+      `${apiHost}/v1/grantees/${address}/users?is_revoked=false&limit=${pageSize}&offset=${offset}`,
+      {
+        headers: { accept: 'application/json' },
+      }
+    )
+    if (!res.ok) {
+      throw new Error(`discovery grant check failed: HTTP ${res.status}`)
+    }
+    const payload = await res.json()
+    const users = payload.data || []
+    const user = users.find(
+      (candidate: any) =>
+        lowerAscii(candidate.handle || '') === normalizedHandle
+    )
+    if (user) {
+      return {
+        encodedUserId: encodeId(user.id || user.user_id),
+        handle: user.handle || handle,
+        name: user.name || '',
+      }
+    }
+    if (users.length < pageSize) return
+  }
+}
+
+function handleClaimedError(handle: string, env: string) {
   const profileUrl =
     env === 'production'
       ? `https://audius.co/${handle}`
       : `https://staging.audius.co/${handle}`
-  throw new Error(
+  return new Error(
     `HandleClaimed: '${handle}' already exists on Audius (${profileUrl}). ` +
       `Set audiusHandle in the UI to publish under a different handle.`
   )

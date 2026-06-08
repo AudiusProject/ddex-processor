@@ -1,32 +1,44 @@
 import { afterEach, expect, test, vi } from 'vitest'
 
-const assetRepo = {
-  get: vi.fn(),
-}
-
-const releaseRepo = {
-  get: vi.fn(),
-  upsert: vi.fn(),
-}
-
-const userRepo = {
-  match: vi.fn(),
-  upsert: vi.fn(),
-}
-
-const publogRepo = {
-  log: vi.fn(),
-}
-
-const publishRelease = vi.fn()
-const readAssetWithCaching = vi.fn()
-const findByName = vi.fn()
-const signUp = vi.fn()
-const createHedgehogWalletClient = vi.fn()
-const sdk = vi.fn()
-const createAuthLookupKey = vi.fn()
-const createKey = vi.fn()
-const getEntropyFromLocalStorage = vi.fn()
+const {
+  assetRepo,
+  releaseRepo,
+  userRepo,
+  publogRepo,
+  publishRelease,
+  readAssetWithCaching,
+  findByName,
+  signUp,
+  createHedgehogWalletClient,
+  sdk,
+  createAuthLookupKey,
+  createKey,
+  getEntropyFromLocalStorage,
+} = vi.hoisted(() => ({
+  assetRepo: {
+    get: vi.fn(),
+  },
+  releaseRepo: {
+    get: vi.fn(),
+    upsert: vi.fn(),
+  },
+  userRepo: {
+    match: vi.fn(),
+    upsert: vi.fn(),
+  },
+  publogRepo: {
+    log: vi.fn(),
+  },
+  publishRelease: vi.fn(),
+  readAssetWithCaching: vi.fn(),
+  findByName: vi.fn(),
+  signUp: vi.fn(),
+  createHedgehogWalletClient: vi.fn(),
+  sdk: vi.fn(),
+  createAuthLookupKey: vi.fn(),
+  createKey: vi.fn(),
+  getEntropyFromLocalStorage: vi.fn(),
+}))
 
 vi.mock('../db', () => ({
   assetRepo,

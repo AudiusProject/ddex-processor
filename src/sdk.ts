@@ -3,6 +3,19 @@ import { sdk } from '@audius/sdk'
 import { SourceConfig } from './sources'
 
 const sdkCache: Record<string, AudiusSdkType> = {}
+const PINNED_STORAGE_NODE = 'https://creatornode.audius.co'
+
+const pinnedStorageNodeSelector = {
+  async getSelectedNode() {
+    return PINNED_STORAGE_NODE
+  },
+  getNodes() {
+    return [PINNED_STORAGE_NODE]
+  },
+  triedSelectingAllNodes() {
+    return false
+  },
+}
 
 export function getSdk(sourceConfig: SourceConfig) {
   let { ddexKey, ddexSecret, name, env } = sourceConfig
@@ -17,6 +30,9 @@ export function getSdk(sourceConfig: SourceConfig) {
         apiSecret: ddexSecret,
         appName: name,
         environment: env || 'staging',
+        services: {
+          storageNodeSelector: pinnedStorageNodeSelector,
+        },
       })
     } catch (e) {
       console.log('sdk dial error', e)

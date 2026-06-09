@@ -12,7 +12,12 @@ import {
   releaseRepo,
 } from './db'
 import { publogRepo } from './db/publogRepo'
-import { DDEXContributor, DDEXRelease, DDEXResource, DealPayGated } from './parseDelivery'
+import {
+  DDEXContributor,
+  DDEXRelease,
+  DDEXResource,
+  DealPayGated,
+} from './parseDelivery'
 import { readAssetWithCaching } from './s3poller'
 import { getSdk } from './sdk'
 import { SourceConfig, sources } from './sources'
@@ -110,19 +115,16 @@ export async function publishRelease(
 
   const sdk = getSdk(source)
 
-  // read asset file
-  async function resolveFile({ ref }: DDEXResource) {
-    const asset = await assetRepo.get(source.name, releaseRow.key, ref)
-    if (!asset) {
-      throw new Error(`failed to resolve asset ${releaseRow.key} ${ref}`)
-    }
-    return readAssetWithCaching(asset.xmlUrl, asset.filePath, asset.fileName)
-  }
-
-  const imageFile = await resolveFile(release.images[0])
+  const imageFile = await resolveReleaseAssetFile(
+    source,
+    releaseRow,
+    release.images[0]
+  )
 
   const trackFiles = await Promise.all(
-    release.soundRecordings.map((track) => resolveFile(track))
+    release.soundRecordings.map((track) =>
+      resolveReleaseAssetFile(source, releaseRow, track)
+    )
   )
 
   const trackMetadatas = prepareTrackMetadatas(source, releaseRow, release)
@@ -220,11 +222,17 @@ export async function updateTrack(
 ) {
   const sdk = getSdk(source)
   const metas = prepareTrackMetadatas(source, row, release)
+  const imageFile = await resolveReleaseAssetFile(
+    source,
+    row,
+    release.images[0]
+  )
 
   const result = await sdk.tracks.updateTrack({
     userId: release.audiusUser!,
     trackId: row.entityId!,
     metadata: metas[0],
+    coverArtFile: imageFile as any,
   })
 
   await releaseRepo.update({
@@ -380,11 +388,17 @@ export async function updateAlbum(
 ) {
   const meta = prepareAlbumMetadata(source, row, release)
   const sdk = getSdk(source)
+  const imageFile = await resolveReleaseAssetFile(
+    source,
+    row,
+    release.images[0]
+  )
 
   const result = await sdk.albums.updateAlbum({
     userId: release.audiusUser!,
     albumId: row.entityId!,
     metadata: meta,
+    coverArtFile: imageFile as any,
   })
 
   await releaseRepo.update({
@@ -548,4 +562,16 @@ function mapContributor(c: DDEXContributor) {
     name: c.name,
     roles: [c.role!], // todo: does ddex xml have multiple roles for a contributor?
   }
+}
+
+async function resolveReleaseAssetFile(
+  source: SourceConfig,
+  releaseRow: ReleaseRow,
+  { ref }: DDEXResource
+) {
+  const asset = await assetRepo.get(source.name, releaseRow.key, ref)
+  if (!asset) {
+    throw new Error(`failed to resolve asset ${releaseRow.key} ${ref}`)
+  }
+  return readAssetWithCaching(asset.xmlUrl, asset.filePath, asset.fileName)
 }

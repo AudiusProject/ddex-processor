@@ -194,6 +194,8 @@ export const releaseRepo = {
         update releases set
           "entityId" = null,
           "entityType" = null,
+          "audiusUser" = null,
+          "audiusHandle" = null,
           "blockHash" = null,
           "blockNumber" = null,
           "publishedAt" = null,

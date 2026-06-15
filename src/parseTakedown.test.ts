@@ -1,8 +1,13 @@
 import { beforeAll, expect, test } from 'vitest'
+import { readFile } from 'node:fs/promises'
 
 import { ReleaseProcessingStatus, releaseRepo, userRepo } from './db'
 import { pgMigrate } from './db/migrations'
-import { parseDdexXmlFile, type DDEXRelease } from './parseDelivery'
+import {
+  parseDdexXml,
+  parseDdexXmlFile,
+  type DDEXRelease,
+} from './parseDelivery'
 import { sources } from './sources'
 
 beforeAll(async () => {
@@ -176,6 +181,66 @@ test('crud', async () => {
     expect(rr.status).toBe(ReleaseProcessingStatus.Published)
     expect(rr.entityId).toBe('t2')
   }
+})
+
+test('redelivery after takedown with a new artist clears stale Audius user', async () => {
+  const source = 'crudTest'
+  const grid = 'REDLVRYARTISTCHANGE0000000000000000000000001'
+  const oldArtist = 'Dima E Alyousef'
+  const newArtist = 'SAYee Oasis'
+
+  await userRepo.upsert({
+    apiKey: 'crudTestKey',
+    id: 'dima-user',
+    handle: 'dimaealyousef',
+    name: oldArtist,
+    createdAt: new Date(),
+  })
+
+  const baseXml = await readFile('fixtures/01_delivery.xml', 'utf8')
+  const oldDeliveryXml = baseXml
+    .replaceAll('A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0', grid)
+    .replaceAll('DJ Theo', oldArtist)
+    .replaceAll('Robert Louis', oldArtist)
+    .replace('2024-04-01T05:00:00Z', '2026-06-09T23:00:00Z')
+
+  await parseDdexXml(
+    source,
+    'fixtures/redelivery_old_artist.xml',
+    oldDeliveryXml
+  )
+  let rr = (await releaseRepo.get(grid))!
+  expect(rr.audiusUser).toBe('dima-user')
+
+  await releaseRepo.update({
+    key: grid,
+    status: ReleaseProcessingStatus.Deleted,
+    entityType: 'track',
+    entityId: 'old-track-id',
+    audiusUser: 'dima-user',
+    audiusHandle: 'dimaealyousef',
+    publishedAt: new Date().toISOString(),
+    messageTimestamp: '2026-06-10T00:00:00Z',
+  })
+
+  const redeliveryXml = baseXml
+    .replaceAll('A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0', grid)
+    .replaceAll('DJ Theo', newArtist)
+    .replaceAll('Robert Louis', oldArtist)
+    .replace('2024-04-01T05:00:00Z', '2026-06-10T01:00:00Z')
+
+  await parseDdexXml(
+    source,
+    'fixtures/redelivery_new_artist.xml',
+    redeliveryXml
+  )
+  rr = (await releaseRepo.get(grid))!
+  expect(rr.status).toBe(ReleaseProcessingStatus.PublishPending)
+  expect(rr.artists[0].name).toBe(newArtist)
+  expect(rr.soundRecordings[0].rightsController?.name).toBe(oldArtist)
+  expect(rr.audiusUser).toBeFalsy()
+  expect(rr.audiusHandle).toBeFalsy()
+  expect(rr.entityId).toBeFalsy()
 })
 
 test('purge can match a release by a non-key release id', async () => {

@@ -152,6 +152,7 @@ const steps = [
 
   sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "audiusHandle" text;`,
   sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "mediaDeletedAt" timestamptz;`,
+  sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "partialTrackIds" jsonb;`,
 ]
 
 // poor man's migrate

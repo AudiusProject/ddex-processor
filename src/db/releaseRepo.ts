@@ -199,6 +199,7 @@ export const releaseRepo = {
           "blockHash" = null,
           "blockNumber" = null,
           "publishedAt" = null,
+          "partialTrackIds" = null,
           "mediaDeletedAt" = null,
           "publishErrorCount" = 0,
           "lastPublishError" = null

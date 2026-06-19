@@ -139,15 +139,20 @@ export async function publishRelease(
 
   // publish album
   if (release.soundRecordings.length > 1) {
-    const uploadAlbumRequest: UploadAlbumRequest = {
+    const trackIds = await publishAlbumTracks(
+      releaseRow,
+      release,
+      imageFile,
+      trackFiles,
+      trackMetadatas
+    )
+
+    const result = await sdk.albums.createAlbum({
       coverArtFile: imageFile as any,
       metadata: prepareAlbumMetadata(source, releaseRow, release),
-      trackFiles: trackFiles as any,
-      trackMetadatas,
+      trackIds,
       userId: release.audiusUser!,
-    }
-
-    const result = await sdk.albums.uploadAlbum(uploadAlbumRequest)
+    })
     console.log('album published', result)
 
     await publogRepo.log({
@@ -165,6 +170,7 @@ export async function publishRelease(
       blockNumber: result.blockNumber,
       blockHash: result.blockHash,
       publishedAt: new Date().toISOString(),
+      partialTrackIds: null,
     })
 
     // media stays in S3 for a grace period after publishing; the
@@ -212,6 +218,71 @@ export async function publishRelease(
     // purgeOldPublishedMedia worker routine reclaims it later.
 
     // todo: poll for result to ensure it's actually created
+  }
+
+  async function publishAlbumTracks(
+    releaseRow: ReleaseRow,
+    release: DDEXRelease,
+    imageFile: Awaited<ReturnType<typeof resolveReleaseAssetFile>>,
+    trackFiles: Awaited<ReturnType<typeof resolveReleaseAssetFile>>[],
+    trackMetadatas: UploadTrackRequest['metadata'][]
+  ) {
+    const partialTrackIds = Array.isArray(releaseRow.partialTrackIds)
+      ? releaseRow.partialTrackIds.slice(0, release.soundRecordings.length)
+      : []
+
+    if (partialTrackIds.length === release.soundRecordings.length) {
+      console.log('using partial album track ids', {
+        releaseKey: releaseRow.key,
+        count: partialTrackIds.length,
+      })
+      return partialTrackIds
+    }
+
+    for (
+      let i = partialTrackIds.length;
+      i < release.soundRecordings.length;
+      i++
+    ) {
+      const trackFile = trackFiles[i]
+      const metadata = trackMetadatas[i]
+      if (!trackFile || !metadata) {
+        throw new Error(
+          `missing album track data for ${releaseRow.key} index ${i}`
+        )
+      }
+
+      const trackResult = await sdk.tracks.uploadTrack({
+        userId: release.audiusUser!,
+        metadata,
+        coverArtFile: imageFile as any,
+        trackFile: trackFile as any,
+      })
+
+      if (!trackResult.trackId) {
+        throw new Error(
+          `album track publish missing trackId for ${releaseRow.key} index ${i}`
+        )
+      }
+
+      partialTrackIds.push(trackResult.trackId)
+      await releaseRepo.update({
+        key: releaseRow.key,
+        partialTrackIds: [...partialTrackIds],
+      })
+      await publogRepo.log({
+        release_id: releaseRow.key,
+        msg: 'album track publish result',
+        extra: {
+          index: i,
+          trackId: trackResult.trackId,
+          blockNumber: trackResult.blockNumber,
+          blockHash: trackResult.blockHash,
+        },
+      })
+    }
+
+    return partialTrackIds
   }
 }
 

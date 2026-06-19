@@ -51,6 +51,7 @@ export type ReleaseRow = DDEXRelease & {
   blockHash?: string
   blockNumber?: number
   publishedAt?: string
+  partialTrackIds?: string[] | null
   lastPublishError: string
   publishErrorCount: number
   mediaDeletedAt?: string

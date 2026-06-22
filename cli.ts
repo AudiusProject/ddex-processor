@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import './src/nodeFetchCompatibility'
 
 import { program } from 'commander'
 import { publishToClaimableAccount } from './src/claimable/createUserPublish'
@@ -294,7 +295,7 @@ program
         await sdk.tracks.updateTrack({
           trackId: sdkTrack.id,
           userId: sdkTrack.user.id,
-          metadata: trackUpdate,
+          metadata: trackUpdate as any,
           generatePreview: true,
         })
       } catch (e) {

@@ -861,7 +861,6 @@ app.get('/releases/:key', async (c) => {
                   <select name="audiusGenre" required>
                     <option value="">Select Genre</option>
                     {Object.values(Genre)
-                      .filter((g) => g !== 'All Genres')
                       .map((g) => (
                         <option selected={g === parsedRelease.audiusGenre}>
                           {g}

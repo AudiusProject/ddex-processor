@@ -1,4 +1,7 @@
-import { UploadAlbumRequest, UploadTrackRequest } from '@audius/sdk'
+import type {
+  CreateAlbumMetadata,
+  UploadTrackRequest,
+} from '@audius/sdk'
 import Web3 from 'web3'
 import {
   ClaimableHandleRequiredError,
@@ -152,11 +155,15 @@ export async function publishRelease(
 
     const result = await sdk.albums.createAlbum({
       albumId,
-      coverArtFile: imageFile as any,
+      imageFile: imageFile as any,
       metadata: prepareAlbumMetadata(source, releaseRow, release),
       trackIds,
       userId: release.audiusUser!,
-    })
+    } as any)
+    const resultAlbumId = (result as any).albumId || result.playlistId
+    if (!resultAlbumId) {
+      throw new Error('album publish response missing playlistId')
+    }
     console.log('album published', result)
 
     await publogRepo.log({
@@ -170,7 +177,7 @@ export async function publishRelease(
       key: releaseRow.key,
       status: ReleaseProcessingStatus.Published,
       entityType: 'album',
-      entityId: result.albumId!,
+      entityId: resultAlbumId,
       blockNumber: result.blockNumber,
       blockHash: result.blockHash,
       publishedAt: new Date().toISOString(),
@@ -202,11 +209,11 @@ export async function publishRelease(
     const uploadTrackRequest: UploadTrackRequest = {
       userId: release.audiusUser!,
       metadata,
-      coverArtFile: imageFile as any,
-      trackFile: trackFile as any,
+      imageFile: imageFile as any,
+      audioFile: trackFile as any,
     }
 
-    const result = await sdk.tracks.uploadTrack(uploadTrackRequest)
+    const result = await sdk.tracks.createTrack(uploadTrackRequest as any)
     console.log('track published', result)
 
     await publogRepo.log({
@@ -278,15 +285,15 @@ export async function publishRelease(
         async () => encodeId(await sdk.tracks.generateTrackId())
       )
 
-      const trackResult = await sdk.tracks.uploadTrack({
+      const trackResult = await sdk.tracks.createTrack({
         userId: release.audiusUser!,
         metadata: {
           ...metadata,
           trackId: plannedTrackId,
         },
-        coverArtFile: imageFile as any,
-        trackFile: trackFile as any,
-      })
+        imageFile: imageFile as any,
+        audioFile: trackFile as any,
+      } as any)
 
       if (!trackResult.trackId) {
         throw new Error(
@@ -370,8 +377,8 @@ export async function updateTrack(
   const result = await sdk.tracks.updateTrack({
     userId: release.audiusUser!,
     trackId: row.entityId!,
-    metadata: metas[0],
-    coverArtFile: imageFile as any,
+    metadata: metas[0] as any,
+    imageFile: imageFile as any,
   })
 
   await releaseRepo.update({
@@ -478,7 +485,7 @@ export function prepareTrackMetadatas(
           const cond = {
             usdcPurchase: {
               price: priceUsd * 100,
-              splits: [{ user_id: decodeId(payTo), percentage: 100 }],
+              splits: [{ userId: decodeId(payTo), percentage: 100 }],
             },
           }
 
@@ -537,7 +544,7 @@ export async function updateAlbum(
     userId: release.audiusUser!,
     albumId: row.entityId!,
     metadata: meta,
-    coverArtFile: imageFile as any,
+    imageFile: imageFile as any,
   })
 
   await releaseRepo.update({
@@ -650,8 +657,7 @@ export function prepareAlbumMetadata(
     throw `missing audiusGenre for ${releaseRow.key}`
   }
 
-  const meta: UploadAlbumRequest['metadata'] = {
-    genre: release.audiusGenre,
+  const meta: CreateAlbumMetadata = {
     albumName: title,
     releaseDate,
     ddexReleaseIds: release.releaseIds,
@@ -679,7 +685,7 @@ export function prepareAlbumMetadata(
       const cond = {
         usdcPurchase: {
           price: priceUsd * 100,
-          splits: [{ user_id: decodeId(payTo), percentage: 100 }],
+          splits: [{ userId: decodeId(payTo), percentage: 100 }],
         },
       }
       if (deal.forStream) {

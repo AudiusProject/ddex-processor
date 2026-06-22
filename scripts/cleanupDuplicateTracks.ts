@@ -17,6 +17,7 @@
 
 import { sdk } from '@audius/sdk'
 import 'dotenv/config'
+import '../src/nodeFetchCompatibility'
 
 const API_HOST = process.env.API_HOST || 'https://api.audius.co'
 const APP_NAME = process.env.APP_NAME || 'ddex-duplicate-cleanup'

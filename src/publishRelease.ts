@@ -2,6 +2,7 @@ import type {
   CreateAlbumMetadata,
   UploadTrackRequest,
 } from '@audius/sdk'
+import { fromBuffer as fileTypeFromBuffer } from 'file-type'
 import Web3 from 'web3'
 import {
   ClaimableHandleRequiredError,
@@ -28,6 +29,24 @@ import { decodeId, encodeId } from './util'
 
 const DEFAULT_TRACK_PRICE = 1.0
 const DEFAULT_ALBUM_PRICE = 5.0
+type SdkNodeFile = {
+  buffer: Buffer
+  name?: string
+  type?: string
+}
+type CachedAssetData =
+  | Awaited<ReturnType<typeof readAssetWithCaching>>
+  | Buffer
+  | Uint8Array
+
+function normalizeAssetBuffer(assetData: CachedAssetData): Buffer {
+  if (Buffer.isBuffer(assetData)) return assetData
+  if (assetData instanceof Uint8Array) return Buffer.from(assetData)
+  return Buffer.isBuffer(assetData.buffer)
+    ? assetData.buffer
+    : Buffer.from(assetData.buffer)
+}
+
 export const DEFAULT_TRACK_DEAL: DealPayGated = {
   audiusDealType: 'PayGated',
   forStream: true,
@@ -153,11 +172,15 @@ export async function publishRelease(
       encodeId(await sdk.playlists.generatePlaylistId())
     )
 
+    const metadata = {
+      ...prepareAlbumMetadata(source, releaseRow, release),
+      playlistId: albumId,
+      playlistContents: buildPlaylistContents(trackIds),
+    }
+
     const result = await sdk.albums.createAlbum({
-      albumId,
       imageFile: imageFile as any,
-      metadata: prepareAlbumMetadata(source, releaseRow, release),
-      trackIds,
+      metadata: metadata as any,
       userId: release.audiusUser!,
     } as any)
     const resultAlbumId = (result as any).albumId || result.playlistId
@@ -395,6 +418,14 @@ function toValidDate(val: string | undefined): Date | undefined {
   if (!val) return undefined
   const d = new Date(val)
   return isNaN(d.getTime()) ? undefined : d
+}
+
+function buildPlaylistContents(trackIds: string[]) {
+  const timestamp = Math.floor(Date.now() / 1000)
+  return trackIds.map((trackId) => ({
+    trackId,
+    timestamp,
+  }))
 }
 
 export function prepareTrackMetadatas(
@@ -713,10 +744,21 @@ async function resolveReleaseAssetFile(
   source: SourceConfig,
   releaseRow: ReleaseRow,
   { ref }: DDEXResource
-) {
+): Promise<SdkNodeFile> {
   const asset = await assetRepo.get(source.name, releaseRow.key, ref)
   if (!asset) {
     throw new Error(`failed to resolve asset ${releaseRow.key} ${ref}`)
   }
-  return readAssetWithCaching(asset.xmlUrl, asset.filePath, asset.fileName)
+  const assetData = await readAssetWithCaching(
+    asset.xmlUrl,
+    asset.filePath,
+    asset.fileName
+  )
+  const buffer = normalizeAssetBuffer(assetData)
+  const detected = await fileTypeFromBuffer(buffer)
+  return {
+    buffer,
+    name: asset.fileName,
+    ...(detected?.mime ? { type: detected.mime } : {}),
+  }
 }

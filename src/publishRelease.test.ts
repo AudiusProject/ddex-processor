@@ -72,13 +72,14 @@ const releaseRow = {
 } as any
 
 function mockCoverAsset() {
-  const imageFile = Buffer.from('cover')
+  const imageBuffer = Buffer.from('cover')
+  const imageFile = { buffer: imageBuffer, name: 'cover.jpg' }
   assetRepo.get.mockResolvedValue({
     xmlUrl: 's3://bucket/release.xml',
     filePath: 'images/',
     fileName: 'cover.jpg',
   })
-  readAssetWithCaching.mockResolvedValue(imageFile)
+  readAssetWithCaching.mockResolvedValue(imageBuffer)
   return imageFile
 }
 
@@ -349,13 +350,21 @@ test('publishRelease persists album track ids after each track publish', async (
     plannedEntityType: 'album',
     plannedEntityId: plannedAlbumId,
   })
-  expect(createAlbumMock).toHaveBeenCalledWith(
+  const albumRequest = createAlbumMock.mock.calls[0][0]
+  expect(albumRequest).toEqual(
     expect.objectContaining({
-      albumId: plannedAlbumId,
-      trackIds: [plannedTrackId1, plannedTrackId2],
       userId: 'user-1',
+      metadata: expect.objectContaining({
+        playlistId: plannedAlbumId,
+        playlistContents: [
+          { trackId: plannedTrackId1, timestamp: expect.any(Number) },
+          { trackId: plannedTrackId2, timestamp: expect.any(Number) },
+        ],
+      }),
     })
   )
+  expect(albumRequest).not.toHaveProperty('albumId')
+  expect(albumRequest).not.toHaveProperty('trackIds')
   expect(releaseRepo.update).toHaveBeenLastCalledWith(
     expect.objectContaining({
       key: 'release-1',
@@ -407,12 +416,20 @@ test('publishRelease reuses partial album track ids on retry', async () => {
   expect(uploadTrackMock).not.toHaveBeenCalled()
   expect(generateTrackIdMock).not.toHaveBeenCalled()
   expect(generatePlaylistIdMock).not.toHaveBeenCalled()
-  expect(createAlbumMock).toHaveBeenCalledWith(
+  const albumRequest = createAlbumMock.mock.calls[0][0]
+  expect(albumRequest).toEqual(
     expect.objectContaining({
-      albumId: 'planned-album-id',
-      trackIds: ['track-id-1', 'track-id-2'],
+      metadata: expect.objectContaining({
+        playlistId: 'planned-album-id',
+        playlistContents: [
+          { trackId: 'track-id-1', timestamp: expect.any(Number) },
+          { trackId: 'track-id-2', timestamp: expect.any(Number) },
+        ],
+      }),
     })
   )
+  expect(albumRequest).not.toHaveProperty('albumId')
+  expect(albumRequest).not.toHaveProperty('trackIds')
 })
 
 test('publishRelease does not mark albums published without a response id', async () => {
@@ -538,12 +555,20 @@ test('publishRelease reuses a planned album id when album creation fails', async
     )
   ).rejects.toThrow('album failed')
 
-  expect(createAlbumMock).toHaveBeenCalledWith(
+  const albumRequest = createAlbumMock.mock.calls[0][0]
+  expect(albumRequest).toEqual(
     expect.objectContaining({
-      albumId: 'planned-album-id',
-      trackIds: ['track-id-1', 'track-id-2'],
+      metadata: expect.objectContaining({
+        playlistId: 'planned-album-id',
+        playlistContents: [
+          { trackId: 'track-id-1', timestamp: expect.any(Number) },
+          { trackId: 'track-id-2', timestamp: expect.any(Number) },
+        ],
+      }),
     })
   )
+  expect(albumRequest).not.toHaveProperty('albumId')
+  expect(albumRequest).not.toHaveProperty('trackIds')
 })
 
 test('publishRelease persists a planned single track id before upload', async () => {

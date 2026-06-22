@@ -9,6 +9,7 @@
 
 import { sdk } from '@audius/sdk'
 import 'dotenv/config'
+import '../src/nodeFetchCompatibility'
 
 const API_HOST = 'https://api.audius.co'
 

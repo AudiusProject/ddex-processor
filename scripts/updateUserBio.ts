@@ -12,6 +12,7 @@
 
 import { sdk } from '@audius/sdk'
 import 'dotenv/config'
+import '../src/nodeFetchCompatibility'
 
 const API_HOST = 'https://api.audius.co'
 
@@ -93,7 +94,8 @@ async function main() {
     environment: 'production',
   })
 
-  const result = await audiusSdk.users.updateProfile({
+  const result = await audiusSdk.users.updateUser({
+    id: resolvedUserId,
     userId: resolvedUserId,
     metadata: { bio },
   })

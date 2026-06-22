@@ -1,4 +1,4 @@
-import { createHedgehogWalletClient, sdk } from '@audius/sdk'
+import { createHedgehogWalletClient, createSdkWithServices } from '@audius/sdk'
 import { randomBytes } from 'crypto'
 import { assetRepo, releaseRepo, userRepo } from '../db'
 import { publogRepo } from '../db/publogRepo'
@@ -9,6 +9,7 @@ import { sources } from '../sources'
 import { encodeId, lowerAscii } from '../util'
 import { WalletManager } from '@audius/hedgehog'
 import { generateRecoveryInfo, getHedgehog } from './hedgehog'
+import { getSdkNetworkConfig } from '../sdk'
 
 export class ClaimableHandleRequiredError extends Error {
   constructor(artistName: string) {
@@ -124,9 +125,9 @@ export async function publishToClaimableAccount(releaseId: string) {
     )
 
     const audiusWalletClient = createHedgehogWalletClient(getHedgehog())
-    const userSdk = sdk({
+    const userSdk = createSdkWithServices({
       appName: 'ddex',
-      environment: source.env || 'staging',
+      ...getSdkNetworkConfig(source.env),
       services: {
         audiusWalletClient,
       },
@@ -146,11 +147,15 @@ export async function publishToClaimableAccount(releaseId: string) {
       extra: newUser,
     })
 
-    encodedUserId = encodeId(newUser.metadata.userId)
+    if (!newUser.userId) {
+      throw new Error('create user response missing userId')
+    }
+    encodedUserId = newUser.userId
     console.log(newUser, encodedUserId)
 
     // upload profile picture + cover photo
-    const updateImageResult = await userSdk.users.updateProfile({
+    const updateImageResult = await userSdk.users.updateUser({
+      id: encodedUserId,
       userId: encodedUserId,
       metadata: {},
       profilePictureFile: imageFile as any,

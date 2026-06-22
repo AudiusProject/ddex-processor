@@ -1,8 +1,8 @@
-import type { AudiusSdk as AudiusSdkType } from '@audius/sdk'
-import { sdk } from '@audius/sdk'
-import { SourceConfig } from './sources'
+import type { AudiusSdkWithServices } from '@audius/sdk'
+import { createSdkWithServices } from '@audius/sdk'
+import type { SourceConfig } from './sources'
 
-const sdkCache: Record<string, AudiusSdkType> = {}
+const sdkCache: Record<string, AudiusSdkWithServices> = {}
 const PINNED_STORAGE_NODE = 'https://creatornode.audius.co'
 
 const pinnedStorageNodeSelector = {
@@ -17,6 +17,24 @@ const pinnedStorageNodeSelector = {
   },
 }
 
+export function getSdkNetworkConfig(env: SourceConfig['env']) {
+  if (!env) {
+    throw new Error(
+      'source env is required for DDEX publishing with @audius/sdk v15'
+    )
+  }
+  if (env === 'development') {
+    return { environment: 'development' as const }
+  }
+  if (env === 'staging') {
+    throw new Error(
+      'staging DDEX publishing is not supported by @audius/sdk v15'
+    )
+  }
+
+  return { environment: 'production' as const }
+}
+
 export function getSdk(sourceConfig: SourceConfig) {
   let { ddexKey, ddexSecret, name, env } = sourceConfig
   if (!sdkCache[ddexKey]) {
@@ -25,17 +43,18 @@ export function getSdk(sourceConfig: SourceConfig) {
       ddexSecret = '0x' + ddexSecret
     }
     try {
-      sdkCache[ddexKey] = sdk({
+      sdkCache[ddexKey] = createSdkWithServices({
         apiKey: ddexKey,
         apiSecret: ddexSecret,
         appName: name,
-        environment: env || 'staging',
+        ...getSdkNetworkConfig(env),
         services: {
           storageNodeSelector: pinnedStorageNodeSelector,
         },
       })
     } catch (e) {
       console.log('sdk dial error', e)
+      throw e
     }
   }
 

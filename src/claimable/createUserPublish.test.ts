@@ -10,7 +10,7 @@ const {
   findByName,
   signUp,
   createHedgehogWalletClient,
-  sdk,
+  createSdkWithServices,
   createAuthLookupKey,
   createKey,
   getEntropyFromLocalStorage,
@@ -34,7 +34,7 @@ const {
   findByName: vi.fn(),
   signUp: vi.fn(),
   createHedgehogWalletClient: vi.fn(),
-  sdk: vi.fn(),
+  createSdkWithServices: vi.fn(),
   createAuthLookupKey: vi.fn(),
   createKey: vi.fn(),
   getEntropyFromLocalStorage: vi.fn(),
@@ -66,7 +66,7 @@ vi.mock('../sources', () => ({
 
 vi.mock('@audius/sdk', () => ({
   createHedgehogWalletClient,
-  sdk,
+  createSdkWithServices,
 }))
 
 vi.mock('@audius/hedgehog', () => ({

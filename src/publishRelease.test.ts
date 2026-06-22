@@ -49,6 +49,7 @@ import {
   updateTrack,
 } from './publishRelease'
 import { type SourceConfig } from './sources'
+import { encodeId } from './util'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -269,46 +270,88 @@ test('updateAlbum sends the latest cover art file', async () => {
 
 test('publishRelease persists album track ids after each track publish', async () => {
   mockReleaseAssets()
+  const plannedTrackId1 = encodeId(101)
+  const plannedTrackId2 = encodeId(102)
+  const plannedAlbumId = encodeId(201)
   const uploadTrackMock = vi
     .fn()
     .mockResolvedValueOnce({
-      trackId: 'track-id-1',
+      trackId: plannedTrackId1,
       blockHash: '0xtrack1',
       blockNumber: 10,
     })
     .mockResolvedValueOnce({
-      trackId: 'track-id-2',
+      trackId: plannedTrackId2,
       blockHash: '0xtrack2',
       blockNumber: 11,
     })
   const createAlbumMock = vi.fn().mockResolvedValue({
-    albumId: 'album-id-1',
+    albumId: plannedAlbumId,
     blockHash: '0xalbum',
     blockNumber: 12,
   })
+  const generateTrackIdMock = vi
+    .fn()
+    .mockResolvedValueOnce(101)
+    .mockResolvedValueOnce(102)
+  const generatePlaylistIdMock = vi.fn().mockResolvedValue(201)
   getSdk.mockReturnValue({
     tracks: {
       uploadTrack: uploadTrackMock,
+      generateTrackId: generateTrackIdMock,
     },
     albums: {
       createAlbum: createAlbumMock,
+    },
+    playlists: {
+      generatePlaylistId: generatePlaylistIdMock,
     },
   })
 
   await publishRelease(source, releaseRow, albumRelease())
 
   expect(uploadTrackMock).toHaveBeenCalledTimes(2)
+  expect(uploadTrackMock).toHaveBeenNthCalledWith(
+    1,
+    expect.objectContaining({
+      metadata: expect.objectContaining({
+        trackId: plannedTrackId1,
+      }),
+    })
+  )
+  expect(uploadTrackMock).toHaveBeenNthCalledWith(
+    2,
+    expect.objectContaining({
+      metadata: expect.objectContaining({
+        trackId: plannedTrackId2,
+      }),
+    })
+  )
   expect(releaseRepo.update).toHaveBeenNthCalledWith(1, {
     key: 'release-1',
-    partialTrackIds: ['track-id-1'],
+    plannedTrackIds: [plannedTrackId1],
   })
   expect(releaseRepo.update).toHaveBeenNthCalledWith(2, {
     key: 'release-1',
-    partialTrackIds: ['track-id-1', 'track-id-2'],
+    partialTrackIds: [plannedTrackId1],
+  })
+  expect(releaseRepo.update).toHaveBeenNthCalledWith(3, {
+    key: 'release-1',
+    plannedTrackIds: [plannedTrackId1, plannedTrackId2],
+  })
+  expect(releaseRepo.update).toHaveBeenNthCalledWith(4, {
+    key: 'release-1',
+    partialTrackIds: [plannedTrackId1, plannedTrackId2],
+  })
+  expect(releaseRepo.update).toHaveBeenNthCalledWith(5, {
+    key: 'release-1',
+    plannedEntityType: 'album',
+    plannedEntityId: plannedAlbumId,
   })
   expect(createAlbumMock).toHaveBeenCalledWith(
     expect.objectContaining({
-      trackIds: ['track-id-1', 'track-id-2'],
+      albumId: plannedAlbumId,
+      trackIds: [plannedTrackId1, plannedTrackId2],
       userId: 'user-1',
     })
   )
@@ -317,7 +360,10 @@ test('publishRelease persists album track ids after each track publish', async (
       key: 'release-1',
       status: 'Published',
       entityType: 'album',
-      entityId: 'album-id-1',
+      entityId: plannedAlbumId,
+      plannedEntityType: null,
+      plannedEntityId: null,
+      plannedTrackIds: null,
       partialTrackIds: null,
     })
   )
@@ -326,6 +372,8 @@ test('publishRelease persists album track ids after each track publish', async (
 test('publishRelease reuses partial album track ids on retry', async () => {
   mockReleaseAssets()
   const uploadTrackMock = vi.fn()
+  const generateTrackIdMock = vi.fn()
+  const generatePlaylistIdMock = vi.fn()
   const createAlbumMock = vi.fn().mockResolvedValue({
     albumId: 'album-id-1',
     blockHash: '0xalbum',
@@ -334,9 +382,13 @@ test('publishRelease reuses partial album track ids on retry', async () => {
   getSdk.mockReturnValue({
     tracks: {
       uploadTrack: uploadTrackMock,
+      generateTrackId: generateTrackIdMock,
     },
     albums: {
       createAlbum: createAlbumMock,
+    },
+    playlists: {
+      generatePlaylistId: generatePlaylistIdMock,
     },
   })
 
@@ -345,13 +397,18 @@ test('publishRelease reuses partial album track ids on retry', async () => {
     {
       ...releaseRow,
       partialTrackIds: ['track-id-1', 'track-id-2'],
+      plannedEntityType: 'album',
+      plannedEntityId: 'planned-album-id',
     },
     albumRelease()
   )
 
   expect(uploadTrackMock).not.toHaveBeenCalled()
+  expect(generateTrackIdMock).not.toHaveBeenCalled()
+  expect(generatePlaylistIdMock).not.toHaveBeenCalled()
   expect(createAlbumMock).toHaveBeenCalledWith(
     expect.objectContaining({
+      albumId: 'planned-album-id',
       trackIds: ['track-id-1', 'track-id-2'],
     })
   )
@@ -359,21 +416,31 @@ test('publishRelease reuses partial album track ids on retry', async () => {
 
 test('publishRelease keeps partial album track ids when a later track fails', async () => {
   mockReleaseAssets()
+  const plannedTrackId1 = encodeId(101)
+  const plannedTrackId2 = encodeId(102)
   const uploadTrackMock = vi
     .fn()
     .mockResolvedValueOnce({
-      trackId: 'track-id-1',
+      trackId: plannedTrackId1,
       blockHash: '0xtrack1',
       blockNumber: 10,
     })
     .mockRejectedValueOnce(new Error('track publish failed'))
   const createAlbumMock = vi.fn()
+  const generateTrackIdMock = vi
+    .fn()
+    .mockResolvedValueOnce(101)
+    .mockResolvedValueOnce(102)
   getSdk.mockReturnValue({
     tracks: {
       uploadTrack: uploadTrackMock,
+      generateTrackId: generateTrackIdMock,
     },
     albums: {
       createAlbum: createAlbumMock,
+    },
+    playlists: {
+      generatePlaylistId: vi.fn(),
     },
   })
 
@@ -383,7 +450,160 @@ test('publishRelease keeps partial album track ids when a later track fails', as
 
   expect(releaseRepo.update).toHaveBeenCalledWith({
     key: 'release-1',
-    partialTrackIds: ['track-id-1'],
+    plannedTrackIds: [plannedTrackId1],
+  })
+  expect(releaseRepo.update).toHaveBeenCalledWith({
+    key: 'release-1',
+    partialTrackIds: [plannedTrackId1],
+  })
+  expect(releaseRepo.update).toHaveBeenCalledWith({
+    key: 'release-1',
+    plannedTrackIds: [plannedTrackId1, plannedTrackId2],
   })
   expect(createAlbumMock).not.toHaveBeenCalled()
+})
+
+test('publishRelease reuses a planned album id when album creation fails', async () => {
+  mockReleaseAssets()
+  const createAlbumMock = vi.fn().mockRejectedValue(new Error('album failed'))
+  getSdk.mockReturnValue({
+    tracks: {
+      uploadTrack: vi.fn(),
+      generateTrackId: vi.fn(),
+    },
+    albums: {
+      createAlbum: createAlbumMock,
+    },
+    playlists: {
+      generatePlaylistId: vi.fn(),
+    },
+  })
+
+  await expect(
+    publishRelease(
+      source,
+      {
+        ...releaseRow,
+        partialTrackIds: ['track-id-1', 'track-id-2'],
+        plannedEntityType: 'album',
+        plannedEntityId: 'planned-album-id',
+      },
+      albumRelease()
+    )
+  ).rejects.toThrow('album failed')
+
+  expect(createAlbumMock).toHaveBeenCalledWith(
+    expect.objectContaining({
+      albumId: 'planned-album-id',
+      trackIds: ['track-id-1', 'track-id-2'],
+    })
+  )
+})
+
+test('publishRelease persists a planned single track id before upload', async () => {
+  mockReleaseAssets()
+  const plannedTrackId = encodeId(301)
+  const uploadTrackMock = vi.fn().mockResolvedValue({
+    trackId: plannedTrackId,
+    blockHash: '0xtrack',
+    blockNumber: 20,
+  })
+  const generateTrackIdMock = vi.fn().mockResolvedValue(301)
+  getSdk.mockReturnValue({
+    tracks: {
+      uploadTrack: uploadTrackMock,
+      generateTrackId: generateTrackIdMock,
+    },
+  })
+
+  await publishRelease(
+    source,
+    {
+      ...releaseRow,
+      entityId: undefined,
+    },
+    {
+      ...albumRelease({
+        title: 'Single Title',
+        releaseIds: { isrc: 'USRC17607839' },
+        soundRecordings: [
+          {
+            ref: 'track-1',
+            title: 'Track One',
+            artists: [],
+            contributors: [],
+            indirectContributors: [],
+          },
+        ],
+      }),
+    }
+  )
+
+  expect(releaseRepo.update).toHaveBeenNthCalledWith(1, {
+    key: 'release-1',
+    plannedEntityType: 'track',
+    plannedEntityId: plannedTrackId,
+  })
+  expect(uploadTrackMock).toHaveBeenCalledWith(
+    expect.objectContaining({
+      metadata: expect.objectContaining({
+        trackId: plannedTrackId,
+      }),
+    })
+  )
+  expect(releaseRepo.update).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      entityType: 'track',
+      entityId: plannedTrackId,
+      plannedEntityType: null,
+      plannedEntityId: null,
+    })
+  )
+})
+
+test('publishRelease seeds planned track ids from prior partial album tracks', async () => {
+  mockReleaseAssets()
+  const plannedTrackId2 = encodeId(102)
+  const uploadTrackMock = vi.fn().mockResolvedValue({
+    trackId: plannedTrackId2,
+    blockHash: '0xtrack2',
+    blockNumber: 11,
+  })
+  const createAlbumMock = vi.fn().mockRejectedValue(new Error('stop'))
+  const generateTrackIdMock = vi.fn().mockResolvedValue(102)
+  getSdk.mockReturnValue({
+    tracks: {
+      uploadTrack: uploadTrackMock,
+      generateTrackId: generateTrackIdMock,
+    },
+    albums: {
+      createAlbum: createAlbumMock,
+    },
+    playlists: {
+      generatePlaylistId: vi.fn(),
+    },
+  })
+
+  await expect(
+    publishRelease(
+      source,
+      {
+        ...releaseRow,
+        partialTrackIds: ['track-id-1'],
+      },
+      albumRelease()
+    )
+  ).rejects.toThrow('stop')
+
+  expect(releaseRepo.update).toHaveBeenCalledWith({
+    key: 'release-1',
+    plannedTrackIds: ['track-id-1', plannedTrackId2],
+  })
+  expect(uploadTrackMock).toHaveBeenCalledWith(
+    expect.objectContaining({
+      metadata: expect.objectContaining({
+        trackId: plannedTrackId2,
+      }),
+    })
+  )
 })

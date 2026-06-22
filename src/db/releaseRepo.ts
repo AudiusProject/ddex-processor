@@ -31,7 +31,12 @@ export const releaseRepo = {
   //   but a single file can contain multiple releases
   //   so still need a way to pick an identifier, right?
   chooseReleaseId(releaseIds: DDEXReleaseIds) {
-    const key = releaseIds.isrc || releaseIds.icpn || releaseIds.grid || releaseIds.proprietary_id || releaseIds.catalog_number
+    const key =
+      releaseIds.isrc ||
+      releaseIds.icpn ||
+      releaseIds.grid ||
+      releaseIds.proprietary_id ||
+      releaseIds.catalog_number
     if (!key) {
       const msg = `failed to chooseReleaseId: ${JSON.stringify(releaseIds)}`
       console.log(msg)
@@ -199,6 +204,9 @@ export const releaseRepo = {
           "blockHash" = null,
           "blockNumber" = null,
           "publishedAt" = null,
+          "plannedEntityType" = null,
+          "plannedEntityId" = null,
+          "plannedTrackIds" = null,
           "partialTrackIds" = null,
           "mediaDeletedAt" = null,
           "publishErrorCount" = 0,

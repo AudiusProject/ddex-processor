@@ -51,6 +51,9 @@ export type ReleaseRow = DDEXRelease & {
   blockHash?: string
   blockNumber?: number
   publishedAt?: string
+  plannedEntityType?: 'track' | 'album' | null
+  plannedEntityId?: string | null
+  plannedTrackIds?: string[] | null
   partialTrackIds?: string[] | null
   lastPublishError: string
   publishErrorCount: number

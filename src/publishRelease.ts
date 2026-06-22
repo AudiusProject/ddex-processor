@@ -21,7 +21,7 @@ import {
 import { readAssetWithCaching } from './s3poller'
 import { getSdk } from './sdk'
 import { SourceConfig, sources } from './sources'
-import { decodeId } from './util'
+import { decodeId, encodeId } from './util'
 
 const DEFAULT_TRACK_PRICE = 1.0
 const DEFAULT_ALBUM_PRICE = 5.0
@@ -146,8 +146,12 @@ export async function publishRelease(
       trackFiles,
       trackMetadatas
     )
+    const albumId = await ensurePlannedEntityId(releaseRow, 'album', async () =>
+      encodeId(await sdk.playlists.generatePlaylistId())
+    )
 
     const result = await sdk.albums.createAlbum({
+      albumId,
       coverArtFile: imageFile as any,
       metadata: prepareAlbumMetadata(source, releaseRow, release),
       trackIds,
@@ -170,6 +174,9 @@ export async function publishRelease(
       blockNumber: result.blockNumber,
       blockHash: result.blockHash,
       publishedAt: new Date().toISOString(),
+      plannedEntityType: null,
+      plannedEntityId: null,
+      plannedTrackIds: null,
       partialTrackIds: null,
     })
 
@@ -186,6 +193,11 @@ export async function publishRelease(
     const trackFile = trackFiles[0]
 
     metadata.ddexReleaseIds = release.releaseIds
+    metadata.trackId = await ensurePlannedEntityId(
+      releaseRow,
+      'track',
+      async () => encodeId(await sdk.tracks.generateTrackId())
+    )
 
     const uploadTrackRequest: UploadTrackRequest = {
       userId: release.audiusUser!,
@@ -212,6 +224,8 @@ export async function publishRelease(
       blockNumber: result.blockNumber,
       blockHash: result.blockHash,
       publishedAt: new Date().toISOString(),
+      plannedEntityType: null,
+      plannedEntityId: null,
     })
 
     // media stays in S3 for a grace period after publishing; the
@@ -230,6 +244,12 @@ export async function publishRelease(
     const partialTrackIds = Array.isArray(releaseRow.partialTrackIds)
       ? releaseRow.partialTrackIds.slice(0, release.soundRecordings.length)
       : []
+    const plannedTrackIds = Array.isArray(releaseRow.plannedTrackIds)
+      ? releaseRow.plannedTrackIds.slice(0, release.soundRecordings.length)
+      : []
+    for (let i = 0; i < partialTrackIds.length; i++) {
+      plannedTrackIds[i] ||= partialTrackIds[i]
+    }
 
     if (partialTrackIds.length === release.soundRecordings.length) {
       console.log('using partial album track ids', {
@@ -251,10 +271,19 @@ export async function publishRelease(
           `missing album track data for ${releaseRow.key} index ${i}`
         )
       }
+      const plannedTrackId = await ensurePlannedTrackId(
+        releaseRow,
+        plannedTrackIds,
+        i,
+        async () => encodeId(await sdk.tracks.generateTrackId())
+      )
 
       const trackResult = await sdk.tracks.uploadTrack({
         userId: release.audiusUser!,
-        metadata,
+        metadata: {
+          ...metadata,
+          trackId: plannedTrackId,
+        },
         coverArtFile: imageFile as any,
         trackFile: trackFile as any,
       })
@@ -284,6 +313,45 @@ export async function publishRelease(
 
     return partialTrackIds
   }
+}
+
+async function ensurePlannedEntityId(
+  releaseRow: ReleaseRow,
+  entityType: NonNullable<ReleaseRow['plannedEntityType']>,
+  generateId: () => Promise<string>
+) {
+  if (
+    releaseRow.plannedEntityId &&
+    releaseRow.plannedEntityType === entityType
+  ) {
+    return releaseRow.plannedEntityId
+  }
+
+  const plannedEntityId = await generateId()
+  await releaseRepo.update({
+    key: releaseRow.key,
+    plannedEntityType: entityType,
+    plannedEntityId,
+  })
+  return plannedEntityId
+}
+
+async function ensurePlannedTrackId(
+  releaseRow: ReleaseRow,
+  plannedTrackIds: string[],
+  index: number,
+  generateId: () => Promise<string>
+) {
+  if (plannedTrackIds[index]) {
+    return plannedTrackIds[index]
+  }
+
+  plannedTrackIds[index] = await generateId()
+  await releaseRepo.update({
+    key: releaseRow.key,
+    plannedTrackIds: [...plannedTrackIds],
+  })
+  return plannedTrackIds[index]
 }
 
 export async function updateTrack(

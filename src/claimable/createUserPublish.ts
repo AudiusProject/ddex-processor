@@ -1,5 +1,5 @@
 import { createHedgehogWalletClient, createSdkWithServices } from '@audius/sdk'
-import { randomBytes } from 'crypto'
+import { createHash, randomBytes } from 'crypto'
 import { assetRepo, releaseRepo, userRepo } from '../db'
 import { publogRepo } from '../db/publogRepo'
 import { DDEXResource } from '../parseDelivery'
@@ -73,7 +73,7 @@ export async function publishToClaimableAccount(releaseId: string) {
   }
 
   const imageFile = await resolveFile(release.images[0])
-  const email = `ddex-support+${handle}@audius.co`
+  let email = claimableEmailForHandle(handle)
   const password = randomBytes(16).toString('hex')
 
   // attempt to find existing user record
@@ -111,10 +111,25 @@ export async function publishToClaimableAccount(releaseId: string) {
     // no user: create claimable user
     console.log(`=== creating claimable account for ${artistName}`)
     const hedgehog = getHedgehog()
-    const identityResult = await hedgehog.signUp({
-      username: email,
-      password,
-    })
+    let identityResult
+    try {
+      identityResult = await hedgehog.signUp({
+        username: email,
+        password,
+      })
+    } catch (e) {
+      if (!isIdentityUserExistsError(e)) {
+        throw e
+      }
+      email = claimableEmailForHandle(handle, releaseRow.key)
+      console.log(
+        `claimable login already exists for ${handle}; retrying with release-scoped login`
+      )
+      identityResult = await hedgehog.signUp({
+        username: email,
+        password,
+      })
+    }
     console.log('identityResult', identityResult)
 
     const { login } = await generateRecoveryInfo()
@@ -209,6 +224,19 @@ export async function publishToClaimableAccount(releaseId: string) {
 export function defaultClaimableHandle(artistName: string) {
   const fromArtist = artistName.replace(/[^a-zA-Z0-9.]/g, '')
   return fromArtist || undefined
+}
+
+export function claimableEmailForHandle(handle: string, releaseKey?: string) {
+  const suffix = releaseKey
+    ? `-${createHash('sha256').update(releaseKey).digest('hex').slice(0, 12)}`
+    : ''
+  return `ddex-support+${handle}${suffix}@audius.co`
+}
+
+function isIdentityUserExistsError(e: unknown) {
+  return String((e as Error)?.message || e).includes(
+    'Account already exists for user'
+  )
 }
 
 async function lookupUserByHandle(

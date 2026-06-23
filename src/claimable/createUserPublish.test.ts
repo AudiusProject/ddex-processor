@@ -13,6 +13,7 @@ const {
   createSdkWithServices,
   createAuthLookupKey,
   createKey,
+  generateRecoveryInfo,
   getEntropyFromLocalStorage,
 } = vi.hoisted(() => ({
   assetRepo: {
@@ -37,6 +38,7 @@ const {
   createSdkWithServices: vi.fn(),
   createAuthLookupKey: vi.fn(),
   createKey: vi.fn(),
+  generateRecoveryInfo: vi.fn(),
   getEntropyFromLocalStorage: vi.fn(),
 }))
 
@@ -77,7 +79,7 @@ vi.mock('@audius/hedgehog', () => ({
 }))
 
 vi.mock('./hedgehog', () => ({
-  generateRecoveryInfo: vi.fn(),
+  generateRecoveryInfo,
   getHedgehog: vi.fn(() => ({
     signUp,
     createKey,
@@ -87,6 +89,7 @@ vi.mock('./hedgehog', () => ({
 import {
   ClaimableHandleRequiredError,
   ClaimableRecoveryRequiredError,
+  claimableEmailForHandle,
   defaultClaimableHandle,
   publishToClaimableAccount,
 } from './createUserPublish'
@@ -107,6 +110,15 @@ test('defaultClaimableHandle returns no handle for non-ASCII artist names', () =
 
 test('defaultClaimableHandle preserves dots in artist names', () => {
   expect(defaultClaimableHandle('DJ Theo Jr.')).toBe('DJTheoJr.')
+})
+
+test('claimableEmailForHandle can scope stale login retries to a release', () => {
+  expect(claimableEmailForHandle('DJTheo')).toBe(
+    'ddex-support+DJTheo@audius.co'
+  )
+  expect(claimableEmailForHandle('DJTheo', 'release-1')).toMatch(
+    /^ddex-support\+DJTheo-[a-f0-9]{12}@audius\.co$/
+  )
 })
 
 test('ClaimableHandleRequiredError explains the operator action', () => {
@@ -234,4 +246,102 @@ test('retries fail with a recovery-required error when the remote account exists
   )
   expect(userRepo.upsert).not.toHaveBeenCalled()
   expect(publishRelease).not.toHaveBeenCalled()
+})
+
+test('retries with a release-scoped login when the support login already exists but the handle is free', async () => {
+  const release = {
+    key: 'release-1',
+    source: 'source-1',
+    xmlUrl: 's3://bucket/file.xml',
+    messageTimestamp: '2026-06-08T00:00:00.000Z',
+    artists: [{ name: 'DJ Theo' }],
+    images: [{ ref: 'cover' }],
+    soundRecordings: [],
+    releaseIds: [],
+  }
+  const createUser = vi.fn().mockResolvedValue({ userId: 'user-1' })
+  const updateUser = vi.fn().mockResolvedValue({ blockHash: '0ximage' })
+  const createGrant = vi.fn().mockResolvedValue({ blockHash: '0xgrant' })
+
+  releaseRepo.get.mockResolvedValue(release)
+  findByName.mockReturnValue({
+    ddexKey: '0xabc123',
+    env: 'production',
+    name: 'source-1',
+  })
+  assetRepo.get.mockResolvedValue({
+    xmlUrl: 's3://bucket/file.xml',
+    filePath: '/tmp/cover.jpg',
+    fileName: 'cover.jpg',
+  })
+  readAssetWithCaching.mockResolvedValue(Buffer.from('cover'))
+  userRepo.match.mockResolvedValue(undefined)
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+    ok: false,
+    status: 404,
+  } as any)
+  signUp
+    .mockRejectedValueOnce(
+      new Error(
+        'set user failed {"error":"Account already exists for user, try logging in"}'
+      )
+    )
+    .mockResolvedValueOnce({
+      getAddressString: () => '0xwallet',
+    })
+  createHedgehogWalletClient.mockReturnValue({ wallet: true })
+  createSdkWithServices.mockReturnValue({
+    users: {
+      createUser,
+      updateUser,
+    },
+    grants: {
+      createGrant,
+    },
+  })
+  generateRecoveryInfo.mockResolvedValue({
+    login: 'recovery-login',
+    host: 'https://audius.co',
+    loginUrl: 'https://audius.co/recover?login=recovery-login',
+  })
+  createAuthLookupKey.mockResolvedValue('lookup-key')
+
+  await publishToClaimableAccount('release-1')
+
+  const initialSignUp = signUp.mock.calls[0][0]
+  const retrySignUp = signUp.mock.calls[1][0]
+  expect(initialSignUp).toEqual({
+    username: 'ddex-support+DJTheo@audius.co',
+    password: expect.any(String),
+  })
+  expect(retrySignUp).toEqual({
+    username: claimableEmailForHandle('DJTheo', 'release-1'),
+    password: initialSignUp.password,
+  })
+  expect(createAuthLookupKey).toHaveBeenCalledWith(
+    claimableEmailForHandle('DJTheo', 'release-1'),
+    initialSignUp.password,
+    createKey
+  )
+  expect(createUser).toHaveBeenCalledWith({
+    metadata: {
+      handle: 'DJTheo',
+      name: 'DJ Theo',
+      wallet: '0xwallet',
+    },
+  })
+  expect(userRepo.upsert).toHaveBeenCalledWith({
+    apiKey: '0xabc123',
+    createdAt: expect.any(Date),
+    handle: 'DJTheo',
+    id: 'user-1',
+    login: 'recovery-login',
+    lookupKey: 'lookup-key',
+    name: 'DJ Theo',
+  })
+  expect(publishRelease).toHaveBeenCalledWith(
+    expect.objectContaining({ ddexKey: '0xabc123' }),
+    expect.objectContaining({ audiusUser: 'user-1' }),
+    expect.objectContaining({ audiusUser: 'user-1' })
+  )
 })

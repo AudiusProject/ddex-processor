@@ -1,24 +1,48 @@
 import { afterEach, expect, test, vi } from 'vitest'
 
-const { assetRepo, getSdk, publogRepo, readAssetWithCaching, releaseRepo } =
-  vi.hoisted(() => ({
-    assetRepo: {
-      get: vi.fn(),
-    },
-    getSdk: vi.fn(),
-    publogRepo: {
-      log: vi.fn(),
-    },
-    readAssetWithCaching: vi.fn(),
-    releaseRepo: {
-      update: vi.fn(),
-    },
-  }))
+const {
+  artistProfileUpdateRepo,
+  assetRepo,
+  getSdk,
+  publogRepo,
+  readAssetWithCaching,
+  releaseRepo,
+  userRepo,
+} = vi.hoisted(() => ({
+  artistProfileUpdateRepo: {
+    all: vi.fn(),
+    update: vi.fn(),
+    addPublishBlock: vi.fn(),
+    addPublishError: vi.fn(),
+  },
+  assetRepo: {
+    get: vi.fn(),
+  },
+  getSdk: vi.fn(),
+  publogRepo: {
+    log: vi.fn(),
+  },
+  readAssetWithCaching: vi.fn(),
+  releaseRepo: {
+    update: vi.fn(),
+  },
+  userRepo: {
+    findByIdAndApiKey: vi.fn(),
+    upsert: vi.fn(),
+  },
+}))
 
 vi.mock('./db', () => ({
+  artistProfileUpdateRepo,
   assetRepo,
   releaseRepo,
-  userRepo: {},
+  userRepo,
+  ArtistProfileUpdateStatus: {
+    Blocked: 'Blocked',
+    PublishPending: 'PublishPending',
+    Published: 'Published',
+    Failed: 'Failed',
+  },
   ReleaseProcessingStatus: {
     Blocked: 'Blocked',
     PublishPending: 'PublishPending',
@@ -46,6 +70,7 @@ import {
   fetchAlbumTrackIds,
   publishRelease,
   repairTrackMedia,
+  publishArtistProfileUpdate,
   updateAlbum,
   updateTrack,
 } from './publishRelease'
@@ -415,6 +440,112 @@ test('updateAlbum sends the latest cover art file', async () => {
   expect(releaseUpdate).not.toHaveProperty('transactionHash')
 })
 
+test('publishArtistProfileUpdate updates Audius profile metadata and image', async () => {
+  const profileBuffer = Buffer.from('profile image')
+  const updateUserMock = vi.fn().mockResolvedValue({
+    blockHash: '0xprofile',
+    blockNumber: 33,
+  })
+  readAssetWithCaching.mockResolvedValue(profileBuffer)
+  getSdk.mockReturnValue({
+    users: {
+      updateUser: updateUserMock,
+    },
+  })
+  userRepo.findByIdAndApiKey.mockResolvedValue({
+    apiKey: source.ddexKey,
+    id: 'user-1',
+    handle: 'artist',
+    name: 'Artist',
+    createdAt: new Date(),
+  })
+
+  await publishArtistProfileUpdate(source, {
+    key: 'artist-update-1',
+    source: source.name,
+    xmlUrl: 's3://bucket/mead.xml',
+    messageTimestamp: '2026-06-22T12:00:00Z',
+    status: 'PublishPending',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    publishErrorCount: 0,
+    lastPublishError: '',
+    audiusUser: 'user-1',
+    artistName: 'Artist',
+    displayName: 'Artist Official',
+    bio: 'A compact artist bio.',
+    profilePicture: {
+      ref: 'profile-image',
+      filePath: 'images/',
+      fileName: 'profile.jpg',
+    },
+    problems: [],
+  } as any)
+
+  expect(readAssetWithCaching).toHaveBeenCalledWith(
+    's3://bucket/mead.xml',
+    'images/',
+    'profile.jpg'
+  )
+  expect(updateUserMock).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'user-1',
+      userId: 'user-1',
+      metadata: {
+        name: 'Artist Official',
+        bio: 'A compact artist bio.',
+      },
+      profilePictureFile: expect.objectContaining({
+        buffer: profileBuffer,
+        name: 'profile.jpg',
+      }),
+    })
+  )
+  expect(artistProfileUpdateRepo.update).toHaveBeenCalledWith(
+    expect.objectContaining({
+      key: 'artist-update-1',
+      status: 'Published',
+      publishedAt: expect.any(String),
+      blockHash: '0xprofile',
+      blockNumber: 33,
+    })
+  )
+  expect(userRepo.upsert).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'user-1',
+      name: 'Artist Official',
+    })
+  )
+})
+
+test('publishArtistProfileUpdate rejects remote MEAD image URLs', async () => {
+  await expect(
+    publishArtistProfileUpdate(source, {
+      key: 'artist-update-remote-image',
+      source: source.name,
+      xmlUrl: 's3://bucket/mead.xml',
+      messageTimestamp: '2026-06-22T12:00:00Z',
+      status: 'PublishPending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      publishErrorCount: 0,
+      lastPublishError: '',
+      audiusUser: 'user-1',
+      bio: 'A compact artist bio.',
+      profilePicture: {
+        ref: 'profile-image',
+        filePath: '',
+        fileName: 'profile.jpg',
+        uri: 'https://cdn.example.test/profile.jpg',
+      },
+      problems: [],
+    } as any)
+  ).rejects.toThrow('remote MEAD image URLs are not supported')
+
+  expect(readAssetWithCaching).not.toHaveBeenCalled()
+  expect(getSdk).not.toHaveBeenCalled()
+})
+
 test('publishRelease persists album track ids after each track publish', async () => {
   mockReleaseAssets()
   const plannedTrackId1 = encodeId(101)
@@ -628,9 +759,9 @@ test('publishRelease does not mark albums published without a response id', asyn
     },
   })
 
-  await expect(publishRelease(source, releaseRow, albumRelease())).rejects.toThrow(
-    'album publish response missing playlistId'
-  )
+  await expect(
+    publishRelease(source, releaseRow, albumRelease())
+  ).rejects.toThrow('album publish response missing playlistId')
 
   expect(releaseRepo.update).not.toHaveBeenLastCalledWith(
     expect.objectContaining({

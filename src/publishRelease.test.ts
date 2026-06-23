@@ -185,7 +185,11 @@ test('deleteAlbumTracks deletes each track in the album', async () => {
 
 test('updateTrack sends the latest cover art file', async () => {
   const imageFile = mockCoverAsset()
-  const updateTrackMock = vi.fn().mockResolvedValue({ blockHash: '0xabc' })
+  const updateTrackMock = vi.fn().mockResolvedValue({
+    blockHash: '0xabc',
+    blockNumber: 12,
+    transactionHash: '0xtx',
+  })
   getSdk.mockReturnValue({
     tracks: {
       updateTrack: updateTrackMock,
@@ -227,11 +231,26 @@ test('updateTrack sends the latest cover art file', async () => {
       }),
     })
   )
+  const releaseUpdate = releaseRepo.update.mock.calls[0][0]
+  expect(releaseUpdate).toEqual(
+    expect.objectContaining({
+      key: 'release-1',
+      status: 'Published',
+      publishedAt: expect.any(String),
+      blockHash: '0xabc',
+      blockNumber: 12,
+    })
+  )
+  expect(releaseUpdate).not.toHaveProperty('transactionHash')
 })
 
 test('updateAlbum sends the latest cover art file', async () => {
   const imageFile = mockCoverAsset()
-  const updateAlbumMock = vi.fn().mockResolvedValue({ blockHash: '0xabc' })
+  const updateAlbumMock = vi.fn().mockResolvedValue({
+    blockHash: '0xabc',
+    blockNumber: 12,
+    transactionHash: '0xtx',
+  })
   getSdk.mockReturnValue({
     albums: {
       updateAlbum: updateAlbumMock,
@@ -268,6 +287,17 @@ test('updateAlbum sends the latest cover art file', async () => {
       }),
     })
   )
+  const releaseUpdate = releaseRepo.update.mock.calls[0][0]
+  expect(releaseUpdate).toEqual(
+    expect.objectContaining({
+      key: 'release-1',
+      status: 'Published',
+      publishedAt: expect.any(String),
+      blockHash: '0xabc',
+      blockNumber: 12,
+    })
+  )
+  expect(releaseUpdate).not.toHaveProperty('transactionHash')
 })
 
 test('publishRelease persists album track ids after each track publish', async () => {

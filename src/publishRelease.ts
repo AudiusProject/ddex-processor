@@ -408,7 +408,7 @@ export async function updateTrack(
     key: row.key,
     status: ReleaseProcessingStatus.Published,
     publishedAt: new Date().toISOString(),
-    ...result,
+    ...sdkWriteResultFields(result),
   })
 
   return result
@@ -426,6 +426,18 @@ function buildPlaylistContents(trackIds: string[]) {
     trackId,
     timestamp,
   }))
+}
+
+function sdkWriteResultFields(result: {
+  blockHash?: string
+  blockNumber?: number
+}): Partial<Pick<ReleaseRow, 'blockHash' | 'blockNumber'>> {
+  return {
+    ...(result.blockHash ? { blockHash: result.blockHash } : {}),
+    ...(result.blockNumber !== undefined
+      ? { blockNumber: result.blockNumber }
+      : {}),
+  }
 }
 
 export function prepareTrackMetadatas(
@@ -582,7 +594,7 @@ export async function updateAlbum(
     key: row.key,
     status: ReleaseProcessingStatus.Published,
     publishedAt: new Date().toISOString(),
-    ...result,
+    ...sdkWriteResultFields(result),
   })
 
   return result

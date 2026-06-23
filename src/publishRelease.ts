@@ -1,7 +1,4 @@
-import type {
-  CreateAlbumMetadata,
-  UploadTrackRequest,
-} from '@audius/sdk'
+import type { CreateAlbumMetadata, UploadTrackRequest } from '@audius/sdk'
 import { fromBuffer as fileTypeFromBuffer } from 'file-type'
 import Web3 from 'web3'
 import {
@@ -10,13 +7,18 @@ import {
   publishToClaimableAccount,
 } from './claimable/createUserPublish'
 import {
+  ArtistProfileUpdateRow,
+  ArtistProfileUpdateStatus,
   ReleaseProcessingStatus,
   ReleaseRow,
+  artistProfileUpdateRepo,
   assetRepo,
   releaseRepo,
+  userRepo,
 } from './db'
 import { publogRepo } from './db/publogRepo'
 import {
+  DDEXArtistProfileUpdate,
   DDEXContributor,
   DDEXRelease,
   DDEXResource,
@@ -63,6 +65,8 @@ export const DEFAULT_ALBUM_DEAL: DealPayGated = {
 }
 
 export async function publishValidPendingReleases() {
+  await publishValidPendingArtistProfileUpdates()
+
   const rows = await releaseRepo.all({ pendingPublish: true })
   if (!rows.length) return
 
@@ -117,6 +121,95 @@ export async function publishValidPendingReleases() {
       }
     }
   }
+}
+
+export async function publishValidPendingArtistProfileUpdates() {
+  const rows = await artistProfileUpdateRepo.all({ pendingPublish: true })
+  if (!rows.length) return
+
+  for (const row of rows) {
+    const source = sources.findByName(row.source)
+    if (!source) {
+      await artistProfileUpdateRepo.addPublishBlock(
+        row.key,
+        new Error(`missing source: ${row.source}`)
+      )
+      continue
+    }
+
+    try {
+      await publishArtistProfileUpdate(source, row)
+    } catch (e: any) {
+      console.log('failed to publish artist profile update', row.key, e)
+      await artistProfileUpdateRepo.addPublishError(row.key, e)
+    }
+  }
+}
+
+export async function publishArtistProfileUpdate(
+  source: SourceConfig,
+  row: ArtistProfileUpdateRow | DDEXArtistProfileUpdate
+) {
+  if (!row.audiusUser) {
+    throw new Error(`audiusUser is required for artist profile update`)
+  }
+
+  const metadata: Record<string, string> = {}
+  if (row.displayName) {
+    metadata.name = row.displayName
+  }
+  if (row.bio) {
+    if (row.bio.length > 256) {
+      throw new Error(`MEAD bio must be 256 characters or fewer`)
+    }
+    metadata.bio = row.bio
+  }
+
+  const profilePictureFile = row.profilePicture
+    ? await resolveArtistProfileAssetFile(row, row.profilePicture)
+    : undefined
+  const coverArtFile = row.coverArt
+    ? await resolveArtistProfileAssetFile(row, row.coverArt)
+    : undefined
+
+  if (!Object.keys(metadata).length && !profilePictureFile && !coverArtFile) {
+    throw new Error(`artist profile update has no supported fields`)
+  }
+
+  const sdk = getSdk(source)
+  const result = await sdk.users.updateUser({
+    id: row.audiusUser,
+    userId: row.audiusUser,
+    metadata,
+    ...(profilePictureFile
+      ? { profilePictureFile: profilePictureFile as any }
+      : {}),
+    ...(coverArtFile ? { coverArtFile: coverArtFile as any } : {}),
+  } as any)
+
+  if ('key' in row) {
+    await artistProfileUpdateRepo.update({
+      key: row.key,
+      status: ArtistProfileUpdateStatus.Published,
+      publishedAt: new Date().toISOString(),
+      ...sdkWriteResultFields(result),
+    })
+
+    if (row.displayName) {
+      const user = await userRepo.findByIdAndApiKey(
+        row.audiusUser,
+        source.ddexKey
+      )
+      if (user) {
+        await userRepo.upsert({
+          ...user,
+          name: row.displayName,
+        })
+      }
+    }
+  }
+
+  return result
 }
 
 export async function publishRelease(
@@ -350,18 +443,17 @@ async function publishUploadedTrack(
   params: UploadTrackRequest
 ) {
   const { audioFile, imageFile, metadata, onProgress, userId } = params
-  const { audioUploadResponse, imageUploadResponse } =
-    await sdk.tracks
-      .uploadTrackFiles({
-        audioFile,
-        imageFile,
-        fileMetadata: {
-          placementHosts: metadata.placementHosts,
-          previewStartSeconds: metadata.previewStartSeconds,
-        },
-        onProgress,
-      } as any)
-      .start()
+  const { audioUploadResponse, imageUploadResponse } = await sdk.tracks
+    .uploadTrackFiles({
+      audioFile,
+      imageFile,
+      fileMetadata: {
+        placementHosts: metadata.placementHosts,
+        previewStartSeconds: metadata.previewStartSeconds,
+      },
+      onProgress,
+    } as any)
+    .start()
 
   if (!audioUploadResponse) {
     throw new Error('track audio upload response missing')
@@ -850,6 +942,34 @@ async function resolveReleaseAssetFile(
   return {
     buffer,
     name: asset.fileName,
+    ...(detected?.mime ? { type: detected.mime } : {}),
+  }
+}
+
+async function resolveArtistProfileAssetFile(
+  row: Pick<ArtistProfileUpdateRow, 'xmlUrl'> | DDEXArtistProfileUpdate,
+  resource: DDEXResource
+): Promise<SdkNodeFile> {
+  if (resource.uri && /^https?:\/\//i.test(resource.uri)) {
+    throw new Error(
+      `remote MEAD image URLs are not supported; include ${resource.uri} in the delivery package`
+    )
+  }
+
+  if (!('xmlUrl' in row) || !row.xmlUrl) {
+    throw new Error(`xmlUrl is required to resolve MEAD artist profile image`)
+  }
+
+  const assetData = await readAssetWithCaching(
+    row.xmlUrl,
+    resource.filePath || '',
+    resource.fileName
+  )
+  const buffer = normalizeAssetBuffer(assetData)
+  const detected = await fileTypeFromBuffer(buffer)
+  return {
+    buffer,
+    name: resource.fileName,
     ...(detected?.mime ? { type: detected.mime } : {}),
   }
 }

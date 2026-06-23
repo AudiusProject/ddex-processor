@@ -9,12 +9,12 @@ import {
   acknowledgeReleaseFailure,
   acknowledgeReleaseSuccess,
 } from './acknowledgement'
-import { releaseRepo, userRepo, xmlRepo } from './db'
+import { artistProfileUpdateRepo, releaseRepo, userRepo, xmlRepo } from './db'
 import { sources } from './sources'
 import { genreMapping } from './genreMapping'
 import { lowerAscii, omitEmpty } from './util'
 
-type CH = cheerio.Cheerio<Element>
+type CH = cheerio.Cheerio<any>
 
 export type DDEXReleaseIds = {
   party_id?: string
@@ -31,6 +31,352 @@ export type DDEXReleaseIds = {
   mwli?: string
   sici?: string
   proprietary_id?: string
+}
+
+//
+// parse MEAD artist profile updates
+//
+async function parseMeadXml(source: string, $: cheerio.CheerioAPI) {
+  const sourceConfig = sources.findByName(source)
+  const contexts = collectMeadPartyInformation($)
+
+  const work = contexts.map(async ({ $subject, $info, index }) => {
+    const partyNames = extractPartyNames($subject)
+    const pseudonyms = extractPseudonyms($info)
+    const explicitDisplayName =
+      firstLocalText($info, 'DisplayName') ||
+      firstLocalText($info, 'DisplayArtistName') ||
+      pseudonyms.find((p) => p.isOfficial)?.name ||
+      pseudonyms[0]?.name
+    const artistName = partyNames[0] || explicitDisplayName
+    const partyRef =
+      firstLocalText($subject, 'PartyReference') ||
+      firstLocalText($info, 'PartyReference') ||
+      `party-${index + 1}`
+    const ids = extractMeadPartyIds($subject)
+    const artistHandle = ids.artistHandle
+    const audiusUser =
+      (ids.audiusUser &&
+        sourceConfig &&
+        (await userRepo.findByIdAndApiKey(ids.audiusUser, sourceConfig.ddexKey))
+          ?.id) ||
+      (artistHandle &&
+        sourceConfig &&
+        (
+          await userRepo.findByHandleAndApiKey(
+            artistHandle,
+            sourceConfig.ddexKey
+          )
+        )?.id) ||
+      (sourceConfig &&
+        (await userRepo.match(sourceConfig.ddexKey, [
+          ...partyNames,
+          ...pseudonyms.map((p) => p.name),
+          ...(explicitDisplayName ? [explicitDisplayName] : []),
+        ])))
+
+    const images = findByLocalName($info, 'Image')
+      .toArray()
+      .map((el, imageIndex) => parseMeadImage($(el), imageIndex))
+      .filter((image): image is DDEXResource & { imageType?: string } =>
+        Boolean(image)
+      )
+    const coverArt = images.find((image) => isCoverImageType(image.imageType))
+    const profilePicture =
+      images.find((image) => isProfileImageType(image.imageType)) ||
+      images.find((image) => image.ref != coverArt?.ref) ||
+      images[0]
+
+    const update: DDEXArtistProfileUpdate = {
+      partyRef,
+      artistName,
+      artistHandle,
+      audiusUser,
+      displayName: explicitDisplayName || artistName,
+      bio: extractBiography($info),
+      profilePicture,
+      coverArt,
+      problems: [],
+    }
+
+    if (
+      !update.displayName &&
+      !update.bio &&
+      !update.profilePicture &&
+      !update.coverArt
+    ) {
+      return
+    }
+
+    if (!sourceConfig) {
+      update.problems.push('UnknownSource')
+    }
+    if (!update.audiusUser) {
+      update.problems.push('NoAudiusUser')
+    }
+
+    return update
+  })
+
+  return (await Promise.all(work)).filter(
+    (update): update is DDEXArtistProfileUpdate => Boolean(update)
+  )
+}
+
+type MeadPartyInformationContext = {
+  $subject: CH
+  $info: CH
+  index: number
+}
+
+function collectMeadPartyInformation(
+  $: cheerio.CheerioAPI
+): MeadPartyInformationContext[] {
+  const contexts: MeadPartyInformationContext[] = []
+  const entries = findByLocalName($.root(), 'Entry').toArray()
+
+  for (const [index, entry] of entries.entries()) {
+    const $entry = $(entry)
+    const $info = findByLocalName($entry, 'PartyInformation').first()
+    if (!$info.length) continue
+
+    const $subject =
+      childrenByLocalName($entry, 'Party').first().length > 0
+        ? childrenByLocalName($entry, 'Party').first()
+        : findByLocalName($entry, 'PartySummary').first()
+
+    contexts.push({
+      $subject: $subject.length ? $subject : $entry,
+      $info,
+      index,
+    })
+  }
+
+  if (contexts.length) return contexts
+
+  findByLocalName($.root(), 'PartyInformation').each((index, el) => {
+    const $info = $(el)
+    const $subject =
+      findByLocalName($info, 'PartySummary').first().length > 0
+        ? findByLocalName($info, 'PartySummary').first()
+        : findByLocalName($info, 'Party').first()
+
+    contexts.push({
+      $subject: $subject.length ? $subject : $info,
+      $info,
+      index,
+    })
+  })
+
+  return contexts
+}
+
+function extractPartyNames($el: CH) {
+  return uniqueStrings(
+    findByLocalName($el, 'PartyName')
+      .toArray()
+      .map((el) => nameText($elCheerio($el, el)))
+      .filter(Boolean)
+  )
+}
+
+function extractPseudonyms($info: CH) {
+  return findByLocalName($info, 'Pseudonym')
+    .toArray()
+    .map((el) => {
+      const $pseudonym = $elCheerio($info, el)
+      const $name = findByLocalName($pseudonym, 'Name').first()
+      return {
+        name: nameText($name.length ? $name : $pseudonym),
+        isOfficial: parseXmlBool(firstLocalText($pseudonym, 'IsOfficial')),
+      }
+    })
+    .filter((p) => p.name)
+}
+
+function extractBiography($info: CH) {
+  const biographies = findByLocalName($info, 'Biography').toArray()
+  for (const biography of biographies) {
+    const $biography = $elCheerio($info, biography)
+    const text = findByLocalName($biography, 'Text')
+      .toArray()
+      .map((el) => normalizeWhitespace($elCheerio($biography, el).text()))
+      .find(Boolean)
+    if (text) return text
+  }
+}
+
+function extractMeadPartyIds($subject: CH) {
+  const ids: { audiusUser?: string; artistHandle?: string } = {}
+
+  const directAudiusUser =
+    firstLocalText($subject, 'AudiusUserId') ||
+    firstLocalText($subject, 'AudiusUser') ||
+    firstLocalText($subject, 'AudiusProfileId')
+  if (directAudiusUser) ids.audiusUser = directAudiusUser
+
+  const directHandle =
+    firstLocalText($subject, 'AudiusHandle') ||
+    firstLocalText($subject, 'ArtistHandle') ||
+    firstLocalText($subject, 'Handle')
+  if (directHandle) ids.artistHandle = directHandle
+
+  findByLocalName($subject, 'ProprietaryId').each((_, el) => {
+    const $id = $elCheerio($subject, el)
+    const namespace = normalizeWhitespace(
+      [
+        $id.attr('Namespace'),
+        $id.attr('namespace'),
+        firstLocalText($id, 'Namespace'),
+      ]
+        .filter(Boolean)
+        .join(' ')
+    ).toLowerCase()
+    const value =
+      firstLocalText($id, 'Identifier') ||
+      firstLocalText($id, 'PartyId') ||
+      normalizeWhitespace($id.clone().children().remove().end().text()) ||
+      normalizeWhitespace($id.text())
+
+    if (!value) return
+    if (/audius.*(user|profile)|user.*audius/.test(namespace)) {
+      ids.audiusUser ||= value
+    } else if (/audius.*handle|handle.*audius/.test(namespace)) {
+      ids.artistHandle ||= value
+    }
+  })
+
+  return ids
+}
+
+function parseMeadImage(
+  $image: CH,
+  index: number
+): (DDEXResource & { imageType?: string }) | undefined {
+  const $file = findByLocalName($image, 'File').first()
+  const uri =
+    firstLocalText($file, 'URI') ||
+    firstLocalText($file, 'Uri') ||
+    firstLocalText($file, 'URL') ||
+    firstLocalText($file, 'Url')
+  const fromUri = splitResourceUri(uri)
+  const filePath = firstLocalText($file, 'FilePath') || fromUri.filePath || ''
+  const fileName = firstLocalText($file, 'FileName') || fromUri.fileName || ''
+
+  if (!fileName && !uri) return
+
+  const ref =
+    firstLocalText($image, 'ResourceReference') ||
+    firstLocalText($file, 'FileReference') ||
+    `mead-image-${index + 1}`
+  const imageTypeEl = findByLocalName($image, 'ImageType').first()
+  const imageType =
+    imageTypeEl.attr('UserDefinedValue') ||
+    imageTypeEl.attr('Value') ||
+    normalizeWhitespace(imageTypeEl.text())
+
+  return omitEmpty({
+    ref,
+    filePath,
+    fileName,
+    uri,
+    imageType,
+  }) as DDEXResource & { imageType?: string }
+}
+
+function isProfileImageType(imageType?: string) {
+  if (!imageType) return false
+  return /artist|profile|portrait|avatar|photo|headshot/i.test(imageType)
+}
+
+function isCoverImageType(imageType?: string) {
+  if (!imageType) return false
+  return /cover|banner|header|background/i.test(imageType)
+}
+
+function splitResourceUri(uri?: string) {
+  if (!uri) return {}
+  const clean = uri.trim()
+  if (/^https?:\/\//i.test(clean)) {
+    try {
+      const url = new URL(clean)
+      const path = url.pathname
+      return {
+        uri: clean,
+        filePath: '',
+        fileName: path.substring(path.lastIndexOf('/') + 1) || clean,
+      }
+    } catch {
+      return { uri: clean, filePath: '', fileName: clean }
+    }
+  }
+
+  const lastSlashIndex = clean.lastIndexOf('/')
+  if (lastSlashIndex === -1) {
+    return { uri: clean, filePath: '', fileName: clean }
+  }
+  return {
+    uri: clean,
+    filePath: clean.substring(0, lastSlashIndex + 1),
+    fileName: clean.substring(lastSlashIndex + 1),
+  }
+}
+
+function $elCheerio($context: CH, el: Element): CH {
+  const make = ($context as any)._make
+  if (make) return make.call($context, el) as CH
+
+  const $ = cheerio.load([el] as any, { xmlMode: true })
+  return $.root().children().first() as CH
+}
+
+function localName(rawName?: string) {
+  return (rawName || '').split(':').pop() || ''
+}
+
+function elementLocalName(el: Element) {
+  return localName((el as any).name || (el as any).tagName)
+}
+
+function findByLocalName($el: CH, tagName: string) {
+  return $el.find('*').filter((_, el) => elementLocalName(el) == tagName)
+}
+
+function childrenByLocalName($el: CH, tagName: string) {
+  return $el.children().filter((_, el) => elementLocalName(el) == tagName)
+}
+
+function firstLocalText($el: CH, tagName: string) {
+  return normalizeWhitespace(findByLocalName($el, tagName).first().text())
+}
+
+function normalizeWhitespace(text?: string) {
+  return (text || '').replace(/\s+/g, ' ').trim()
+}
+
+function nameText($name: CH) {
+  return (
+    firstLocalText($name, 'FullName') ||
+    firstLocalText($name, 'Name') ||
+    normalizeWhitespace($name.text())
+  )
+}
+
+function parseXmlBool(text?: string) {
+  const normalized = normalizeWhitespace(text).toLowerCase()
+  return normalized == 'true' || normalized == '1'
+}
+
+function uniqueStrings(values: Array<string | undefined>) {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const value of values) {
+    const normalized = normalizeWhitespace(value)
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    result.push(normalized)
+  }
+  return result
 }
 
 export type DDEXPurgeRelease = {
@@ -81,6 +427,19 @@ export type DDEXResource = {
   ref: string
   filePath: string
   fileName: string
+  uri?: string
+}
+
+export type DDEXArtistProfileUpdate = {
+  partyRef?: string
+  artistName?: string
+  artistHandle?: string
+  audiusUser?: string
+  displayName?: string
+  bio?: string
+  profilePicture?: DDEXResource
+  coverArt?: DDEXResource
+  problems: string[]
 }
 
 export type DDEXSoundRecording = {
@@ -195,14 +554,24 @@ export async function parseDdexXml(
     const $ = cheerio.load(xmlText, { xmlMode: true })
 
     const messageTimestamp = $('MessageCreatedDateTime').first().text()
-    const rawTagName = $.root().children().first().prop('name')
+    const rawTagName = $.root().children().first().prop('name') || ''
+    const rootTagName = localName(rawTagName)
     const tagName = [
       'NewReleaseMessage',
       'PurgeReleaseMessage',
       'ManifestMessage',
-    ].find((n) => rawTagName.includes(n))
+      'MeadMessage',
+      'AuxiliaryInformationMessage',
+      'Feed',
+    ].find((n) => rootTagName == n || rawTagName.includes(n))
     const isUpdate = $('UpdateIndicator').text() == 'UpdateMessage'
     const messageId = $('MessageId').text()
+    const isMead =
+      tagName == 'MeadMessage' ||
+      tagName == 'AuxiliaryInformationMessage' ||
+      (tagName == 'Feed' &&
+        findByLocalName($.root(), 'PartyInformation').length > 0) ||
+      findByLocalName($.root(), 'PartyInformationList').length > 0
 
     // Detect DDEX version
     const isDdex40 = xmlText.includes('http://ddex.net/xml/ern/4')
@@ -247,6 +616,17 @@ export async function parseDdexXml(
       }
 
       return releases
+    } else if (isMead) {
+      const artistProfileUpdates = await parseMeadXml(source, $)
+      for (const update of artistProfileUpdates) {
+        await artistProfileUpdateRepo.upsert(
+          source,
+          xmlUrl,
+          messageTimestamp,
+          update
+        )
+      }
+      return artistProfileUpdates
     } else {
       console.log('unknown tagname', tagName)
     }
@@ -901,8 +1281,7 @@ async function parseReleaseXml(
             audiusDealType: 'PayGated',
             forStream: true,
             forDownload: true,
-            priceUsd:
-              release.soundRecordings.length > 1 ? 5.0 : 1.0,
+            priceUsd: release.soundRecordings.length > 1 ? 5.0 : 1.0,
             validityStartDate: new Date().toISOString(),
           }
           release.deals = [defaultDeal]
@@ -913,7 +1292,9 @@ async function parseReleaseXml(
 
       // inherit genre from sound recordings when release has none (Volume/ERN 382 style)
       if (!release.audiusGenre && release.soundRecordings.length) {
-        const firstWithGenre = release.soundRecordings.find((sr) => sr.audiusGenre)
+        const firstWithGenre = release.soundRecordings.find(
+          (sr) => sr.audiusGenre
+        )
         if (firstWithGenre) {
           release.genre = firstWithGenre.genre
           release.subGenre = firstWithGenre.subGenre

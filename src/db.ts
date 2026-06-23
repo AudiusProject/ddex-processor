@@ -1,5 +1,6 @@
-import { DDEXRelease } from './parseDelivery'
+import type { DDEXArtistProfileUpdate, DDEXRelease } from './parseDelivery'
 
+export { artistProfileUpdateRepo } from './db/artistProfileUpdateRepo'
 export { assetRepo } from './db/assetRepo'
 export { isClearedRepo } from './db/isClearedRepo'
 export { releaseRepo } from './db/releaseRepo'
@@ -34,6 +35,13 @@ export enum ReleaseProcessingStatus {
   Deleted = 'Deleted',
 }
 
+export enum ArtistProfileUpdateStatus {
+  Blocked = 'Blocked',
+  PublishPending = 'PublishPending',
+  Published = 'Published',
+  Failed = 'Failed',
+}
+
 export type ReleaseRow = DDEXRelease & {
   source: string
   key: string
@@ -58,6 +66,21 @@ export type ReleaseRow = DDEXRelease & {
   lastPublishError: string
   publishErrorCount: number
   mediaDeletedAt?: string
+}
+
+export type ArtistProfileUpdateRow = DDEXArtistProfileUpdate & {
+  source: string
+  key: string
+  xmlUrl: string
+  messageTimestamp: string
+  status: ArtistProfileUpdateStatus
+  createdAt: string
+  updatedAt: string
+  publishedAt?: string
+  blockHash?: string
+  blockNumber?: number
+  lastPublishError: string
+  publishErrorCount: number
 }
 
 export type S3MarkerRow = {

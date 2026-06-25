@@ -236,7 +236,7 @@ export async function publishRelease(
       audioFile: trackFile as any,
     }
 
-    const result = await sdk.tracks.createTrack(uploadTrackRequest as any)
+    const result = await publishUploadedTrack(sdk, uploadTrackRequest)
     console.log('track published', result)
 
     await publogRepo.log({
@@ -308,7 +308,7 @@ export async function publishRelease(
         async () => encodeId(await sdk.tracks.generateTrackId())
       )
 
-      const trackResult = await sdk.tracks.createTrack({
+      const trackResult = await publishUploadedTrack(sdk, {
         userId: release.audiusUser!,
         metadata: {
           ...metadata,
@@ -343,6 +343,39 @@ export async function publishRelease(
 
     return partialTrackIds
   }
+}
+
+async function publishUploadedTrack(
+  sdk: ReturnType<typeof getSdk>,
+  params: UploadTrackRequest
+) {
+  const { audioFile, imageFile, metadata, onProgress, userId } = params
+  const { audioUploadResponse, imageUploadResponse } =
+    await sdk.tracks
+      .uploadTrackFiles({
+        audioFile,
+        imageFile,
+        fileMetadata: {
+          placementHosts: metadata.placementHosts,
+          previewStartSeconds: metadata.previewStartSeconds,
+        },
+        onProgress,
+      } as any)
+      .start()
+
+  if (!audioUploadResponse) {
+    throw new Error('track audio upload response missing')
+  }
+  if (!imageUploadResponse) {
+    throw new Error('track image upload response missing')
+  }
+
+  return sdk.tracks.publishTrack({
+    userId,
+    metadata,
+    audioUploadResponse,
+    imageUploadResponse,
+  } as any)
 }
 
 async function ensurePlannedEntityId(

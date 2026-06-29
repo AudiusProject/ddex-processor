@@ -69,7 +69,7 @@ test('parses MEAD artist profile updates', async () => {
 test('MEAD sender example: target an authorized artist by Audius user id', async () => {
   await userRepo.upsert({
     apiKey: 'crudTestKey',
-    id: 'artist-user-1',
+    id: '7eP5n',
     handle: 'artistone',
     name: 'Artist One',
     createdAt: new Date(),
@@ -89,7 +89,7 @@ test('MEAD sender example: target an authorized artist by Audius user id', async
       <PartySummary>
         <PartyReference>P-ARTIST-1</PartyReference>
         <ProprietaryId Namespace="AudiusUserId">
-          <Identifier>artist-user-1</Identifier>
+          <Identifier>7eP5n</Identifier>
         </ProprietaryId>
         <PartyName>
           <FullName>
@@ -129,7 +129,7 @@ test('MEAD sender example: target an authorized artist by Audius user id', async
   expect(updates[0]).toMatchObject({
     partyRef: 'P-ARTIST-1',
     artistName: 'Artist One',
-    audiusUser: 'artist-user-1',
+    audiusUser: '7eP5n',
     displayName: 'Artist One Display',
     bio: 'Short artist bio from a standalone MEAD update.',
     profilePicture: {
@@ -143,7 +143,7 @@ test('MEAD sender example: target an authorized artist by Audius user id', async
   const key = artistProfileUpdateRepo.chooseKey('crudTest', xmlUrl, updates[0])
   await expect(artistProfileUpdateRepo.get(key)).resolves.toMatchObject({
     status: ArtistProfileUpdateStatus.PublishPending,
-    audiusUser: 'artist-user-1',
+    audiusUser: '7eP5n',
   })
 })
 

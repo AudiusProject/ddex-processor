@@ -16,7 +16,7 @@ export async function purgeOldUnpublishedMedia() {
   const rows = await releaseRepo.findStaleUnpublishedWithMedia(cutoff)
   if (!rows.length) return
   console.log(
-    `purgeOldUnpublishedMedia: ${rows.length} releases older than ${UNPUBLISHED_STALE_AFTER_DAYS}d still hold media`
+    `purgeOldUnpublishedMedia: ${rows.length} release messages older than ${UNPUBLISHED_STALE_AFTER_DAYS}d still hold media`
   )
   for (const row of rows) {
     try {

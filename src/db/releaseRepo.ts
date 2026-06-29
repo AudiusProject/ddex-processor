@@ -324,8 +324,10 @@ export const releaseRepo = {
     `
   },
 
-  // releases that arrived > cutoff ago, never reached Published/Deleted,
-  // and still have their delivered media on disk in S3
+  // releases whose latest delivery message arrived > cutoff ago, never reached
+  // Published/Deleted, and still have their delivered media on disk in S3.
+  // Use messageTimestamp instead of createdAt because re-deliveries update the
+  // DDEX message timestamp while preserving the original row creation time.
   async findStaleUnpublishedWithMedia(cutoff: Date) {
     const rows: ReleaseRow[] = await sql`
       select * from releases
@@ -334,8 +336,8 @@ export const releaseRepo = {
           ${ReleaseProcessingStatus.Published},
           ${ReleaseProcessingStatus.Deleted}
         )
-        and "createdAt" < ${cutoff.toISOString()}
-      order by "createdAt" asc
+        and nullif("messageTimestamp", '')::timestamptz < ${cutoff}
+      order by nullif("messageTimestamp", '')::timestamptz asc
     `
     return rows
   },

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mead:MeadMessage
+  xmlns:mead="http://ddex.net/xml/mead/10"
+  AvsVersionId="5">
+  <MessageHeader>
+    <MessageId>mead-artist-update-1</MessageId>
+    <MessageCreatedDateTime>2026-06-22T12:00:00Z</MessageCreatedDateTime>
+  </MessageHeader>
+  <PartyInformationList>
+    <PartyInformation>
+      <PartySummary>
+        <PartyReference>P1</PartyReference>
+        <PartyName>
+          <FullName>
+            <Name>DJ Theo</Name>
+          </FullName>
+        </PartyName>
+      </PartySummary>
+      <Pseudonym>
+        <Name>
+          <FullName>
+            <Name>DJ Theo Official</Name>
+          </FullName>
+        </Name>
+        <IsOfficial>true</IsOfficial>
+      </Pseudonym>
+      <Biography>
+        <Text>Oakland producer and DJ building vivid left-field dance records.</Text>
+      </Biography>
+      <Image>
+        <File>
+          <URI>resources/Image_001_001.jpg</URI>
+        </File>
+        <ImageType UserDefinedValue="ProfilePicture" />
+      </Image>
+    </PartyInformation>
+  </PartyInformationList>
+</mead:MeadMessage>

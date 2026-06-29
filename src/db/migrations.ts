@@ -156,6 +156,34 @@ const steps = [
   sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "plannedEntityId" text;`,
   sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "plannedTrackIds" jsonb;`,
   sql`ALTER TABLE releases ADD COLUMN IF NOT EXISTS "partialTrackIds" jsonb;`,
+
+  sql`
+  create table if not exists artist_profile_updates (
+    "source" text not null,
+    "key" text primary key,
+    "xmlUrl" text not null,
+    "messageTimestamp" text,
+    "partyRef" text,
+    "artistName" text,
+    "artistHandle" text,
+    "audiusUser" text,
+    "displayName" text,
+    "bio" text,
+    "profilePicture" jsonb,
+    "coverArt" jsonb,
+    "problems" jsonb,
+    "status" text not null,
+    "blockHash" text,
+    "blockNumber" integer,
+    "publishedAt" timestamptz,
+    "publishErrorCount" integer default 0,
+    "lastPublishError" text,
+    "createdAt" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" timestamptz
+  );
+  `,
+
+  sql`CREATE INDEX IF NOT EXISTS idx_artist_profile_updates_pending ON artist_profile_updates ("status", "publishErrorCount");`,
 ]
 
 // poor man's migrate

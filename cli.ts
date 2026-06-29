@@ -16,6 +16,7 @@ import {
   DEFAULT_TRACK_DEAL,
   prepareTrackMetadatas,
   publishValidPendingReleases,
+  repairTrackMedia,
 } from './src/publishRelease'
 import { clmReport } from './src/reporting/clm_report'
 import { pollForNewLSRFiles } from './src/reporting/lsr_reader'
@@ -304,6 +305,44 @@ program
       }
     }
 
+    process.exit(0)
+  })
+
+program
+  .command('repair-track-media')
+  .description('Re-upload source audio and artwork for an existing published track')
+  .argument('<release_id>', 'release ID to repair')
+  .option('--dry-run', 'Print the planned repair target without writing')
+  .action(async (releaseId, opts) => {
+    const releaseRow = await releaseRepo.get(releaseId)
+    if (!releaseRow) {
+      throw new Error(`Release ID ${releaseId} not found`)
+    }
+    if (releaseRow.entityType != 'track' || !releaseRow.entityId) {
+      throw new Error(`Release ID ${releaseId} must be a published track`)
+    }
+
+    const sourceConfig = sources.findByName(releaseRow.source)!
+    if (opts.dryRun) {
+      console.log('repair-track-media dry run', {
+        releaseId,
+        source: releaseRow.source,
+        trackId: releaseRow.entityId,
+        userId: releaseRow.audiusUser,
+        imageRef: releaseRow.images[0]?.ref,
+        audioRef: releaseRow.soundRecordings[0]?.ref,
+      })
+      process.exit(0)
+    }
+
+    console.log(
+      'repair-track-media',
+      releaseId,
+      releaseRow.source,
+      releaseRow.entityId
+    )
+    const result = await repairTrackMedia(sourceConfig, releaseRow, releaseRow)
+    console.log('repair-track-media result', result)
     process.exit(0)
   })
 

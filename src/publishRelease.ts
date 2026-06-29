@@ -236,7 +236,7 @@ export async function publishRelease(
       audioFile: trackFile as any,
     }
 
-    const result = await sdk.tracks.createTrack(uploadTrackRequest as any)
+    const result = await publishUploadedTrack(sdk, uploadTrackRequest)
     console.log('track published', result)
 
     await publogRepo.log({
@@ -308,7 +308,7 @@ export async function publishRelease(
         async () => encodeId(await sdk.tracks.generateTrackId())
       )
 
-      const trackResult = await sdk.tracks.createTrack({
+      const trackResult = await publishUploadedTrack(sdk, {
         userId: release.audiusUser!,
         metadata: {
           ...metadata,
@@ -343,6 +343,39 @@ export async function publishRelease(
 
     return partialTrackIds
   }
+}
+
+async function publishUploadedTrack(
+  sdk: ReturnType<typeof getSdk>,
+  params: UploadTrackRequest
+) {
+  const { audioFile, imageFile, metadata, onProgress, userId } = params
+  const { audioUploadResponse, imageUploadResponse } =
+    await sdk.tracks
+      .uploadTrackFiles({
+        audioFile,
+        imageFile,
+        fileMetadata: {
+          placementHosts: metadata.placementHosts,
+          previewStartSeconds: metadata.previewStartSeconds,
+        },
+        onProgress,
+      } as any)
+      .start()
+
+  if (!audioUploadResponse) {
+    throw new Error('track audio upload response missing')
+  }
+  if (!imageUploadResponse) {
+    throw new Error('track image upload response missing')
+  }
+
+  return sdk.tracks.publishTrack({
+    userId,
+    metadata,
+    audioUploadResponse,
+    imageUploadResponse,
+  } as any)
 }
 
 async function ensurePlannedEntityId(
@@ -402,6 +435,52 @@ export async function updateTrack(
     trackId: row.entityId!,
     metadata: metas[0] as any,
     imageFile: imageFile as any,
+  })
+
+  await releaseRepo.update({
+    key: row.key,
+    status: ReleaseProcessingStatus.Published,
+    publishedAt: new Date().toISOString(),
+    ...sdkWriteResultFields(result),
+  })
+
+  return result
+}
+
+export async function repairTrackMedia(
+  source: SourceConfig,
+  row: ReleaseRow,
+  release: DDEXRelease
+) {
+  if (!row.entityId) {
+    throw new Error(`release ${row.key} has no Audius track id`)
+  }
+  const soundRecording = release.soundRecordings[0]
+  if (!soundRecording) {
+    throw new Error(`release ${row.key} has no sound recording to repair`)
+  }
+  const image = release.images[0]
+  if (!image) {
+    throw new Error(`release ${row.key} has no image to repair`)
+  }
+
+  const sdk = getSdk(source)
+  const metas = prepareTrackMetadatas(source, row, release)
+  const imageFile = await resolveReleaseAssetFile(source, row, image)
+  const audioFile = await resolveReleaseAssetFile(source, row, soundRecording)
+
+  const result = await sdk.tracks.updateTrack({
+    userId: release.audiusUser!,
+    trackId: row.entityId,
+    metadata: metas[0] as any,
+    imageFile: imageFile as any,
+    audioFile: audioFile as any,
+  } as any)
+
+  await publogRepo.log({
+    release_id: row.key,
+    msg: 'track media repair result',
+    extra: result,
   })
 
   await releaseRepo.update({
